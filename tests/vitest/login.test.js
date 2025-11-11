@@ -1,4 +1,4 @@
-import { createTestSuite } from './test-utils.js';
+import { createTestSuite } from '../../bin/vitest/test-utils.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 

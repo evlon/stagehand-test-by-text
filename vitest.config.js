@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    setupFiles: ['./tests/setup/env-setup.js'], // 添加环境变量加载
+    setupFiles: ['./bin/setup/env-setup.js'], // 添加环境变量加载
     include: ['tests/vitest/**/*.test.js'],
     exclude: ['node_modules/**'],
     environment: 'node',
