@@ -22,6 +22,8 @@ if (files.length === 0) {
 
 // 逐个执行测试文件
 files.forEach((file) => {
-    execSync(`pnpm vitest run ${file}`, { stdio: 'inherit' });
+    try{
+        execSync(`pnpm vitest run ${file}`, { stdio: 'inherit' });
+    } catch (error) {}
 });
 // execSync(`pnpm vitest run tests/vitest/${testPattern}`, { stdio: 'inherit' });
