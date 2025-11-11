@@ -1,0 +1,33 @@
+{
+  "name": "ipm-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "src/index.mjs",
+  "scripts": {
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:login": "vitest run tests/vitest/login.test.js",
+    "test:dashboard": "vitest run tests/vitest/dashboard.test.js",
+    "test:registration": "vitest run tests/vitest/user-registration.test.js",
+    "cache:stats": "node tests/vitest/test-utils.js stats",
+    "cache:clear": "node tests/vitest/test-utils.js clear",
+    "cache:clear:login": "node tests/vitest/test-utils.js clear login-flow",
+    "cache:clear:dashboard": "node tests/vitest/test-utils.js clear dashboard-flow",
+    "cache:clear:registration": "node tests/vitest/test-utils.js clear user-registration-flow"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.14.0",
+  "dependencies": {
+    "@browserbasehq/stagehand": "^3.0.1",
+    "dotenv": "^17.2.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.3"
+  }
+}
