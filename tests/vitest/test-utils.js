@@ -3,7 +3,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describe, test, beforeAll, afterAll, afterEach } from 'vitest';
 import StagehandManager from '../setup/stagehand-setup.js';
-
+import '../setup/env-setup.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -15,7 +15,7 @@ export class TextTestRunner {
   }
 
   parseTextScenario(filePath) {
-    const content = readFileSync(filePath, 'utf-8');
+    const content = readFileSync(filePath, 'utf-8'); 
     const lines = content.split('\n');
     const testCases = [];
     
@@ -69,15 +69,53 @@ export class TextTestRunner {
   determineWorkflow(step, testCaseName) {
     const stepLower = step.toLowerCase();
     
-    if (stepLower.includes('登录') || stepLower.includes('login')) {
-      return 'login-flow';
-    } else if (stepLower.includes('仪表板') || stepLower.includes('dashboard')) {
-      return 'dashboard-flow';
-    } else if (stepLower.includes('注册') || stepLower.includes('register')) {
-      return 'user-registration-flow';
-    } else {
-      return 'shared-actions';
+    // 自动扫描 scenarios 目录获取可用的工作流
+    const scenariosDir = join(process.cwd(), 'tests', 'scenarios');
+    const availableWorkflows = [];
+    
+    if (existsSync(scenariosDir)) {
+      const files = readdirSync(scenariosDir);
+      files.forEach(file => {
+        if (file.endsWith('.txt')) {
+          const workflowName = `${file.replace('.txt', '')}-flow`;
+          availableWorkflows.push({
+            name: workflowName,
+            keywords: [file.replace('.txt', '').toLowerCase()]
+          });
+        }
+      });
     }
+    
+    // 添加共享操作工作流
+    availableWorkflows.push({
+      name: 'shared-actions',
+      keywords: ['shared', 'common', '通用', '共享']
+    });
+    
+    // 动态匹配工作流
+    for (const workflow of availableWorkflows) {
+      for (const keyword of workflow.keywords) {
+        if (stepLower.includes(keyword)) {
+          console.log(`   🔍 步骤 "${step}" 匹配到工作流: ${workflow.name}`);
+          return workflow.name;
+        }
+      }
+    }
+    
+    // 如果测试用例名称包含场景信息，尝试匹配
+    const testCaseLower = testCaseName.toLowerCase();
+    for (const workflow of availableWorkflows) {
+      for (const keyword of workflow.keywords) {
+        if (testCaseLower.includes(keyword) && keyword !== 'shared' && keyword !== 'common') {
+          console.log(`   🔍 测试用例 "${testCaseName}" 匹配到工作流: ${workflow.name}`);
+          return workflow.name;
+        }
+      }
+    }
+    
+    // 默认使用共享操作工作流
+    console.log(`   🔍 步骤 "${step}" 未匹配到特定工作流，使用共享操作`);
+    return 'shared-actions';
   }
 
   async executeStep(stepInfo) {
@@ -90,8 +128,21 @@ export class TextTestRunner {
         console.log(`   💡 ${comment}`);
       }
       console.log(`   🔄 执行: ${action}`);
-      
-      await stagehand.act(action);
+      //打开登录页面 %TEST_BASE_URL% 有变量的
+       const variables = action.match(/%(\w+)%/g);
+      if(variables.length > 0){ 
+        // 提取里面所有引用的变量，从 env 中提取，形成键值对，传入 act 中
+        const variableValues = {};
+        variables.forEach(variable => {
+          const variableName = variable.slice(1, -1); 
+          variableValues[variableName] = process.env[variableName];
+        });
+         
+        await stagehand.act(action, { variables : variableValues});
+      }
+      else{ 
+        await stagehand.act(action);
+      }
       
       return { 
         success: true, 
@@ -112,6 +163,7 @@ export class TextTestRunner {
   }
 
   async runTestCase(testCase) {
+    
     this.currentTestCase = testCase.name;
     const caseResults = {
       name: testCase.name,
@@ -128,6 +180,7 @@ export class TextTestRunner {
     }
 
     for (const stepInfo of testCase.steps) {
+      console.log(`   🔄 执行步骤: ${stepInfo.action}`);
       const stepResult = await this.executeStep(stepInfo);
       caseResults.steps.push(stepResult);
       
@@ -135,6 +188,9 @@ export class TextTestRunner {
         caseResults.passed = false;
         caseResults.error = stepResult.error;
         break;
+      }
+      else{
+        confirm(`   ✅ 步骤 "${stepInfo.action}" 执行成功`);
       }
     }
 

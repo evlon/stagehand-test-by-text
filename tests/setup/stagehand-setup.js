@@ -57,14 +57,19 @@ class StagehandManager {
     const cacheDir = join(this.cacheBaseDir, workflowName);
     
     const stagehandConfig = {
-      env: process.env.STAGEHAND_ENV || "LOCAL",
+      env: process.env.STAGEHAND_ENV || "LOCAL", 
       cacheDir: cacheDir,
+      model: {
+        modelName: process.env.STAGEHAND_MODEL_NAME || "deepseek/deepseek-chat",
+        // apiKey: process.env.OPENAI_API_KEY,
+        baseURL: process.env.STAGEHAND_MODEL_BASE_URL || "https://api.deepseek.com"
+      },
       ...options
     };
-
+ 
     console.log(`🔄 初始化 Stagehand 实例: ${workflowName}`);
     const stagehand = new Stagehand(stagehandConfig);
-    await stagehand.init();
+    await stagehand.init(); 
     
     this.instances.set(workflowName, stagehand);
     console.log(`✅ Stagehand 实例就绪: ${workflowName}`);

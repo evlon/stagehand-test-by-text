@@ -17,8 +17,7 @@ export default defineConfig({
       exclude: ['tests/vitest/test-utils.js']
     },
     testTimeout: 120000,
-    hookTimeout: 120000,
-    setupFiles: [],
+    hookTimeout: 120000
   },
   server: {
     port: 51204
