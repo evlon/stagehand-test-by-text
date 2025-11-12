@@ -10,7 +10,7 @@ import {
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { DeepseekSafeClient } from "./deepseek-safe-client";
-import { createOpenAI } from "@ai-sdk/openai";
+import { DeepseekAIClient } from './deepseek-safe-client';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -74,15 +74,19 @@ class StagehandManager {
     console.log(`🔄 初始化 Stagehand 实例: ${workflowName}`);
     let stagehand = null;
     if (modelConfig.modelName.indexOf("deepseek/") != -1) {
+
       stagehand = new Stagehand({
         env: process.env.STAGEHAND_ENV || "LOCAL",
         cacheDir: cacheDir,
         modelName: modelConfig.modelName,
-        llmClient: new DeepseekSafeClient({
-          model: createOpenAI({
+
+        llmClient: new DeepseekAIClient({
+          modelName: modelConfig.modelName,
+          logger: options.logger || function(msg){console.log(msg.category, msg.message, msg.level, msg.auxiliary)},
+          clientOptions: {
             apiKey: process.env.DEEPSEEK_API_KEY || '',
             baseURL: modelConfig.baseURL
-          })(modelConfig.modelName.split('/')[1]),
+          }
         }),
       });
     } else {    
