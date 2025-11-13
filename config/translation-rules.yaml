@@ -1,0 +1,173 @@
+version: "1.0"
+rules:
+  - name: "goto_url_with_label"
+    patterns:
+      - "打开|{label}|{url}"
+      - "访问|{label}|{url}"
+      - "导航到|{label}|{url}"
+    template: |
+      if (page && typeof page.goto === 'function') {
+        await page.goto('{url}');
+      } else {
+        await stagehand.act('打开 {url}');
+      }
+    validation:
+      required: ["url"]
+  - name: "goto_url"
+    patterns:
+      - "打开|{url}"
+      - "访问|{url}"
+      - "导航到|{url}"
+    template: |
+      if (page && typeof page.goto === 'function') {
+        await page.goto('{url}');
+      } else {
+        await stagehand.act('打开 {url}');
+      }
+    validation:
+      required: ["url"]
+  - name: "click_action"
+    patterns:
+      - "点击{element}"
+      - "选择{element}"
+    template: "await stagehand.act('点击 {element}')"
+    validation:
+      required: ["element"]
+  - name: "click_selector"
+    patterns:
+      - "点击{selector}"
+      - "点击 {selector}"
+      - "单击{selector}"
+      - "单击 {selector}"
+      - "Click {selector}"
+    template: "await page.click('{selector}')"
+    validation:
+      required: ["selector"]
+
+  - name: "input_action"
+    patterns:
+      - "在{field}中输入{value}"
+    template: "await stagehand.act('在 {field} 中输入 {value}')"
+    validation:
+      required: ["field", "value"]
+
+  - name: "input_text"
+    patterns:
+      - "在{selector}输入{text}"
+      - "在{selector}中输入{text}"
+      - "输入{text}到{selector}"
+    template: "await page.fill('{selector}', '{text}')"
+    validation:
+      required: ["selector", "text"]
+
+  - name: "assertion"
+    patterns:
+      - "检查页面是否包含文本{text}"
+    template: |
+      {
+        const result = await stagehand.extract(
+          "检查页面是否包含文本 {text}",
+          z.object({ found: z.boolean() })
+        );
+        if (!result.found) {
+          throw new Error(`未找到文本: ${'{text}'}`);
+        }
+      }
+
+  - name: "assert_text_visible"
+    patterns:
+      - "页面应显示{text}"
+      - "页面应显示 {text}"
+      - "{text}应可见"
+      - "{text} 应可见"
+    template: |
+      const visible = await page.locator(`text=${'{text}'}`).first().isVisible();
+      if (!visible) { throw new Error(`未找到文本: ${'{text}'}`); }
+    validation:
+      required: ["text"]
+
+  - name: "assert_selector_contains_text"
+    patterns:
+      - "断言{selector}包含{text}"
+      - "断言 {selector} 包含 {text}"
+    template: |
+      const content = await page.locator('{selector}').first().innerText();
+      if (!content.includes('{text}')) { throw new Error(`元素 ${'{selector}'} 不包含文本 ${'{text}'}`); }
+    validation:
+      required: ["selector", "text"]
+
+  - name: "wait_text_visible"
+    patterns:
+      - "等待页面上{text}可见"
+      - "等待 {text} 可见"
+      - "等待出现{text}"
+      - "等待出现 {text}"
+    template: |
+      {
+        const locator = page.locator(`text=${'{text}'}`).first();
+        const start = Date.now();
+        let ok = false;
+        while (Date.now() - start < 30000) {
+          try { if (await locator.isVisible()) { ok = true; break; } } catch {}
+          await new Promise(r => setTimeout(r, 300));
+        }
+        if (!ok) { throw new Error(`等待文本可见超时: ${'{text}'}`); }
+      }
+    validation:
+      required: ["text"]
+
+  - name: "wait_for_selector_visible"
+    patterns:
+      - "等待{selector}可见"
+      - "等待 {selector} 可见"
+      - "等待{selector}"
+      - "等待 {selector}"
+    template: |
+      {
+        const locator = page.locator('{selector}').first();
+        const start = Date.now();
+        let ok = false;
+        while (Date.now() - start < 30000) {
+          try { if (await locator.isVisible()) { ok = true; break; } } catch {}
+          await new Promise(r => setTimeout(r, 300));
+        }
+        if (!ok) { throw new Error(`等待元素可见超时: ${'{selector}'}`); }
+      }
+    validation:
+      required: ["selector"]
+
+  - name: "wait_ms"
+    patterns:
+      - "等待{ms}毫秒"
+      - "等待{ms}ms"
+    template: "await new Promise(r => setTimeout(r, {ms}))"
+    validation:
+      required: ["ms"]
+
+  - name: "select_dropdown"
+    patterns:
+      - "选择{selector}为{value}"
+      - "选择 {selector} 为 {value}"
+      - "下拉框{selector}选择{value}"
+      - "下拉框 {selector} 选择 {value}"
+    template: "await page.selectOption('{selector}', '{value}')"
+    validation:
+      required: ["selector", "value"]
+
+  - name: "hover_selector"
+    patterns:
+      - "悬停{selector}"
+      - "悬停 {selector}"
+      - "hover {selector}"
+    template: "await page.hover('{selector}')"
+    validation:
+      required: ["selector"]
+
+  - name: "screenshot"
+    patterns:
+      - "截图保存为{name}"
+      - "截图保存为 {name}"
+      - "保存截图为{name}"
+    template: "await page.screenshot({ path: `results/{name}.png`, fullPage: true })"
+    validation:
+      required: ["name"]

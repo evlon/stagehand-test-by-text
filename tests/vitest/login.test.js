@@ -1,4 +1,4 @@
-import { createTestSuite } from '../../bin/vitest/test-utils.js';
+import { createTestSuite } from '../../bin/itest/core/test-runner.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -7,4 +7,4 @@ const __dirname = dirname(__filename);
 
 // 从文本文件生成完整的登录测试套件
 const textFilePath = join(__dirname, '../scenarios/login.txt');
-createTestSuite(textFilePath).generateTests();
+await createTestSuite(textFilePath).generateTests();

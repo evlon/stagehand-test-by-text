@@ -9,8 +9,8 @@ import {
 } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { DeepseekSafeClient } from "./deepseek-safe-client";
-import { DeepseekAIClient } from './deepseek-safe-client';
+import { DeepseekAIClient } from "./deepseek-safe-client.js";
+// import { DeepseekAIClient } from "../deepseek-ai-client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

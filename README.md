@@ -138,6 +138,40 @@ pnpm test:ui
 ```
 然后在浏览器中打开: `http://localhost:51204`
 
+## 🔄 架构更新与迁移指南
+
+为提升可维护性与扩展性，测试架构已完成升级并移除旧的兼容层：
+
+- 移除旧版 `bin/vitest/*` 兼容脚本，统一采用新版核心测试运行器。
+- 新的文本测试运行器位于 `bin/itest/core/test-runner.js`，通过 Vitest 生成并执行测试。
+- 命令行工具已更新：
+  - `pnpm test:file <scenario.txt>`：只运行指定文本场景（示例：`pnpm test:file login.txt`）。
+  - `pnpm test:changed`：根据 Git 变更直接运行对应的 Vitest 文件。
+  - `pnpm test`：运行全部 Vitest 测试。
+- 规则驱动的自然语言解析器位于 `bin/itest/core/translator/`，其规则在 `config/translation-rules.yaml` 中维护。
+  - 支持常见动作：打开页面、点击、输入、断言文本、等待元素可见、下拉选择、悬停、截图等。
+  - 使用占位符 `{name}`、`{selector}`、`{text}`、`{url}` 等定义参数。
+  - 示例：`打开 {url}`、`在 {selector} 中输入 {text}`、`页面应显示 {text}`、`等待 {selector} 可见`。
+
+### 重要变更点
+- 不再依赖旧的 `StepParser`；当无匹配规则时将自动切换为智能代理模式（agent）执行。
+- 测试步骤中的环境变量格式统一为：`%VAR_NAME%`，运行器会在执行前展开为 `process.env.VAR_NAME` 的值。
+- Vitest 已通过 `setupFiles` 自动加载 `test-data/credentials.env`，请确保该文件存在。
+
+### 常见问题与排查
+- 报错 `Cannot navigate to invalid URL`：
+  - 原因：`%TEST_BASE_URL%` 未被正确展开或为空。
+  - 解决：请执行 `cp test-data/credentials.env.example test-data/credentials.env` 并设置 `TEST_BASE_URL` 为一个可访问的完整 URL。
+- 某些中文表达未匹配到规则：
+  - 现已支持常见的中文表达变体（例如“打开 {url}”“页面应显示 {text}”“截图保存为 {name}”），如仍未命中将自动回退到 agent 模式。
+
+
+2. 使用以下命令运行：
+   - `pnpm test:file login.txt`
+   - `pnpm test:changed`
+   - `pnpm test`
+3. 确保创建并配置 `test-data/credentials.env`（模板：`test-data/credentials.env.example`）。
+
 ## 📝 如何编写好的测试用例
 
 ### 🎯 最佳实践指南
@@ -372,3 +406,19 @@ sudo npm install -g pnpm
 - 确认测试步骤描述是否明确
 
 **祝你测试愉快！** 🚀
+
+## 🧭 命令行接口（PRD 对齐）
+
+- `pnpm test`：运行所有测试（委托内置 runner）
+- `pnpm test:file <name>.txt`：运行单个场景文件（模糊匹配）
+- `pnpm test:case "用例名"`：按测试用例名过滤执行
+- `pnpm test:changed`：仅运行有内容变更的场景（基于 MD5）
+- `pnpm test:watch`：进入监控模式，文件变更自动运行
+- `pnpm test:debug <file.txt>`：进入交互式单步调试模式
+- `pnpm test:step "用例名"`：近似单步调试，仅执行匹配用例
+
+配置管理：
+- `pnpm config:view`：查看 `config/core.yaml` 与 `config/translation-rules.yaml`
+- `pnpm config:validate`：验证上述配置文件语法与基本结构
+
+说明：上述命令在不破坏现有 Vitest 流程的同时，新增了增量执行与调试能力；自然语言转义规则位于 `config/translation-rules.yaml`，可根据业务自由扩展。

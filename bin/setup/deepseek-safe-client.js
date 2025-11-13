@@ -1,7 +1,7 @@
 'use strict'
 // import {createOpenAICompatible} from "@ai-sdk/openai-compatible";
 // import {createOpenAI} from "@ai-sdk/openai";
-import { LLMClient, validateZodSchema, Logger} from "@browserbasehq/stagehand";
+import { LLMClient, validateZodSchema} from "@browserbasehq/stagehand";
 import zodToJsonSchema from "zod-to-json-schema";
 import { OpenAI } from "openai";
 
