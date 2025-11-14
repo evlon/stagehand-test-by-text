@@ -81,6 +81,7 @@ export async function debugFile(scenarioFileArg) {
       console.log(`\n➡️  步骤 ${i + 1}/${tc.steps.length}: ${stepInfo.action}`);
       // 向工作台广播当前步骤信息与规则预览
       try {
+        // const expandedAction = runner.stepExecutor.expandEnv(stepInfo.action);
         const translationPreview = runner.stepExecutor.translator.translate(stepInfo.action);
         wb.broadcast({ type: "step", index: i + 1, total: tc.steps.length, action: stepInfo.action, translation: {
           rule: translationPreview.matchedRule,
@@ -98,51 +99,40 @@ export async function debugFile(scenarioFileArg) {
         wb.broadcast({ type: "log", level: "info", message: `已跳过步骤 ${i + 1}` });
         continue;
       }
-      if (action === "c") {
-        console.log("▶️ 连续运行剩余步骤...");
-        for (let j = i; j < tc.steps.length; j++) {
-          const r = await runner.executeStep(tc.steps[j]);
-          if (!r.success) {
-            console.log("❌ 失败:", r.error);
-            wb.broadcast({ type: "error", message: r.error });
-            return;
-          }
-          wb.broadcast({ type: "result", step: tc.steps[j].action, result: r.result ?? true });
-        }
-        break;
-      }
+      // if (action === "c") {
+      //   console.log("▶️ 连续运行剩余步骤...");
+      //   for (let j = i; j < tc.steps.length; j++) {
+      //     const r = await runner.executeStep(tc.steps[j]);
+      //     if (!r.success) {
+      //       console.log("❌ 失败:", r.error);
+      //       wb.broadcast({ type: "error", message: r.error });
+      //       return;
+      //     }
+      //     wb.broadcast({ type: "result", step: tc.steps[j].action, result: r.result ?? true });
+      //   }
+      //   break;
+      // }
       if (typeof action === "object") {
-        // 工作台扩展动作：自然语言或脚本
-        const stagehand = await runner.stepExecutor.getStagehandForWorkflow(stepInfo.workflow);
-        if (action.kind === "nl" && action.text) {
-          wb.broadcast({ type: "script", script: action.text });
-          const res = await stagehand.act(action.text, { timeout: 30000 });
-          const success = !(res && res.error);
-          wb.broadcast({ type: "result", step: action.text, result: res });
-          if (success && state.settings?.autoAddOnSuccess) {
-            const idx = Number.isInteger(state.currentStepIndex) ? state.currentStepIndex + 1 : tc.steps.length;
-            tc.steps.splice(idx, 0, { action: action.text, comment: null, workflow: runner.determineWorkflow(action.text, tc.name) });
-            state.dirty = true;
-            wb.broadcast({ type: "log", level: "info", message: `已自动添加步骤: ${action.text}` });
-            wb.broadcast({ type: "steps", steps: tc.steps.map((s) => s.action) });
+        // 工作台扩展动作：自然语言或脚本 → 封装为 stepInfo 并走统一执行逻辑
+        if (action && typeof action.text === "string" && action.text.trim()) {
+          const text = action.text.trim();
+          wb.broadcast({ type: "script", script: text });
+          const newStep = { action: text, comment: null, workflow: runner.determineWorkflow(text, tc.name) };
+          const r = await runner.executeStep(newStep);
+          if (!r.success) {
+            wb.broadcast({ type: "error", message: r.error });
+          } else {
+            wb.broadcast({ type: "result", step: newStep.action, result: r.result ?? true });
+            if (state.settings?.autoAddOnSuccess) {
+              const idx = Number.isInteger(state.currentStepIndex) ? state.currentStepIndex + 1 : tc.steps.length;
+              tc.steps.splice(idx, 0, { action: text, comment: null, workflow: newStep.workflow });
+              state.dirty = true;
+              wb.broadcast({ type: "log", level: "info", message: `已自动添加步骤: ${text}` });
+              wb.broadcast({ type: "steps", steps: tc.steps.map((s) => s.action) });
+            }
           }
           // 回到当前 i 继续等待下一动作
           i--; // 不推进步骤索引
-          continue;
-        }
-        if (action.kind === "script" && action.text) {
-          wb.broadcast({ type: "script", script: action.text });
-          const res = await stagehand.act(action.text, { timeout: 30000 });
-          const success = !(res && res.error);
-          wb.broadcast({ type: "result", step: action.text, result: res });
-          if (success && state.settings?.autoAddOnSuccess) {
-            const idx = Number.isInteger(state.currentStepIndex) ? state.currentStepIndex + 1 : tc.steps.length;
-            tc.steps.splice(idx, 0, { action: action.text, comment: null, workflow: runner.determineWorkflow(action.text, tc.name) });
-            state.dirty = true;
-            wb.broadcast({ type: "log", level: "info", message: `已自动添加步骤: ${action.text}` });
-            wb.broadcast({ type: "steps", steps: tc.steps.map((s) => s.action) });
-          }
-          i--;
           continue;
         }
         // 未识别，退回 e
@@ -155,11 +145,65 @@ export async function debugFile(scenarioFileArg) {
         // 工作台模式，CLI 不再自动重试；可通过再次点击“执行”实现重试
       } else {
         console.log("✅ 成功");
-        wb.broadcast({ type: "result", step: stepInfo.action, result: result.result ?? true });
+        wb.broadcast({ type: "result", step: stepInfo.action, result: result.result ?? true, continueRunning: i !== tc.steps.length - 1 });
       }
     }
   }
-  // 退出清理
+  // 所有步骤执行完毕后，不自动退出，提示已到最后一步并继续等待用户操作
+  try {
+    wb.broadcast({ type: "log", level: "info", message: "已到最后一步，可继续在工作台执行脚本或添加步骤。点击\"退出\"结束。" });
+  } catch {}
+
+  // 等待用户后续动作：
+  // - 点击“退出”才结束
+  // - 发送自然语言/脚本：执行并可按设置自动追加为新步骤
+  // - 点击“执行”：默认重跑最后一步（便于复验）
+  while (true) {
+    const action = await wb.nextAction();
+    if (action === "q") break; // 用户明确退出
+    const tc = state.testCases[state.currentCaseIndex] || { name: "", steps: [], comments: [] };
+    const lastIndex = Math.max(0, Math.min(tc.steps.length - 1, Number.isInteger(state.currentStepIndex) ? state.currentStepIndex : tc.steps.length - 1));
+    const lastStep = tc.steps[lastIndex];
+    if (!lastStep && typeof action !== "object") {
+      // 没有可执行的步骤且不是脚本/自然语言，忽略
+      wb.broadcast({ type: "log", level: "info", message: "当前无可执行步骤，请添加步骤或发送脚本/自然语言。" });
+      continue;
+    }
+    if (typeof action === "object") {
+      if (action && typeof action.text === "string" && action.text.trim()) {
+        const text = action.text.trim();
+        // wb.broadcast({ type: "script", script: text });
+        const newStep = { action: text, comment: null, workflow: runner.determineWorkflow(text, tc.name) };
+        wb.broadcast({ type: "script", script: newStep.action });
+        const r = await runner.executeStep(newStep);
+        if (!r.success) {
+          wb.broadcast({ type: "error", message: r.error });
+        } else {
+          wb.broadcast({ type: "result", step: newStep.action, result: r.result ?? true });
+          if (state.settings?.autoAddOnSuccess) {
+            const idx = Number.isInteger(state.currentStepIndex) ? state.currentStepIndex + 1 : tc.steps.length;
+            tc.steps.splice(idx, 0, { action: text, comment: null, workflow: newStep.workflow });
+            state.dirty = true;
+            wb.broadcast({ type: "log", level: "info", message: `已自动添加步骤: ${text}` });
+            wb.broadcast({ type: "steps", steps: tc.steps.map((s) => s.action) });
+          }
+        }
+        continue;
+      }
+    }
+    if (action === "e" && lastStep) {
+      const result = await runner.executeStep(lastStep);
+      if (!result.success) {
+        wb.broadcast({ type: "error", message: result.error });
+      } else {
+        wb.broadcast({ type: "result", step: lastStep.action, result: result.result ?? true });
+      }
+      continue;
+    }
+    // 其它动作（如 s/c）在最后一步时无特殊含义，保持等待
+  }
+
+  // 退出清理（仅在用户点击“退出”后执行）
   try {
     wb.broadcast({ type: "quit" });
   } catch {}
@@ -187,6 +231,7 @@ if (process.argv[1] && process.argv[1].endsWith("step-debugger.js")) {
 
 // 简易工作台服务（HTTP + SSE）
 function startWorkbenchServer(state, runner) {
+
   return new Promise((resolve) => {
     let clients = [];
     let pendingActionResolver = null;
@@ -202,6 +247,8 @@ function startWorkbenchServer(state, runner) {
         clients.forEach((c) => c.write(data));
       } catch {}
     };
+
+
     const server = http.createServer((req, res) => {
       const { pathname } = parseUrl(req.url || "");
       if (req.method === "GET" && pathname === "/") {
@@ -250,6 +297,36 @@ function startWorkbenchServer(state, runner) {
         });
         return;
       }
+
+      
+       // 翻译预览：实时解析输入文本并返回规则匹配信息与代码片段
+      if (req.method === "POST" && pathname === "/translate_preview") {
+        jsonBody(req, res, (payload) => {
+          const text = (payload?.text || "").trim();
+          if (!text) return sendJson(res, 400, { ok: false, error: "text 不能为空" });
+          try {
+            /*
+            return {
+        engine: "rules",
+        matchedRule: rule.name,
+        matchedPattern: pattern,
+        params: groups,
+        template: rule.template,
+        code,
+        type: this.inferTypeFromTemplate(rule.template),
+      };
+            */
+           const translateAction = runner.stepExecutor.translator.translate(text);
+            return sendJson(res, 200, {
+              ok: true,
+              ...translateAction
+            });
+          } catch (e) {
+            return sendJson(res, 500, { ok: false, error: e.message });
+          }
+        });
+        return;
+      }
       if (req.method === "POST" && pathname === "/action") {
         let body = "";
         req.on("data", (chunk) => (body += chunk));
@@ -288,6 +365,7 @@ function startWorkbenchServer(state, runner) {
         });
         return;
       }
+     
       if (req.method === "POST" && pathname === "/steps/update") {
         jsonBody(req, res, (payload) => {
           const tc = state.testCases[state.currentCaseIndex] || { steps: [] };
@@ -419,7 +497,10 @@ function startWorkbenchServer(state, runner) {
         if (existsSync(rulesPath)) {
           import('fs').then(({ watch }) => {
             const w = watch(rulesPath, { persistent: true }, () => {
-              try { runner.stepExecutor.translator.reload(); emit({ type: 'rules_updated', file: 'translation-rules.yaml' }); }
+              try { 
+                runner.stepExecutor.translator.reload(); emit({ type: 'rules_updated', file: 'translation-rules.yaml' }); 
+                console.log("规则重载成功");
+              }
               catch (e) { emit({ type: 'error', message: `规则重载失败: ${e.message}` }); }
             });
             try { watchers.push(w); } catch {}

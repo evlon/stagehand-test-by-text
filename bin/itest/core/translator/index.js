@@ -86,7 +86,7 @@ export class Translator {
     if (pattern.includes("|")) {
       const segments = pattern.split("|").map((s) => s.trim());
       const compiledSegments = segments.map((seg) => this._compileSegment(seg));
-      const body = compiledSegments.join("\\s*\\|\\s*");
+      const body = compiledSegments.join("\\.*?");
       return new RegExp(`^${body}$`);
     }
     // 非管道规则，按原逻辑处理（精确匹配字面与占位符）
@@ -118,13 +118,23 @@ export class Translator {
     return s.replace(/[.*+?^$()|[\]\\]/g, "\\$&");
   }
 
+  _expandEnv(text) {
+    return text.replace(/%(\w+)%/g, (_, name) => {
+      const v = process.env[name];
+      return typeof v === "string" && v.length > 0 ? v : `%${name}%`;
+    });
+  }
+
   translate(stepText) {
-    const match = this.matchRule(stepText);
+    const stepTextEnv = this._expandEnv(stepText);
+    const match = this.matchRule(stepTextEnv);
     if (match) {
       const { rule, groups, pattern } = match;
       const code = this.renderTemplate(rule.template, groups);
       return {
         engine: "rules",
+        action: stepTextEnv,
+        actionRaw: stepText,
         matchedRule: rule.name,
         matchedPattern: pattern,
         params: groups,

@@ -6,9 +6,18 @@
   const pattern = document.getElementById('pattern');
   const scriptOut = document.getElementById('scriptOut');
   const resultOut = document.getElementById('resultOut');
+  const ruleLast = document.getElementById('ruleLast');
+  const patternLast = document.getElementById('patternLast');
+  const scriptOutLast = document.getElementById('scriptOutLast');
+  const resultOutLast = document.getElementById('resultOutLast');
   const sendBtn = document.getElementById('sendCustom');
+  const addFromInputBtn = document.getElementById('addFromInput');
   const customText = document.getElementById('customText');
   const rulesUpdate = document.getElementById('rulesUpdate');
+  const lastDoneStep = document.getElementById('lastDoneStep');
+  const pendingRule = document.getElementById('pendingRule');
+  const pendingPattern = document.getElementById('pendingPattern');
+  const pendingScriptOut = document.getElementById('pendingScriptOut');
   const btnSave = document.getElementById('btnSave');
   const fileName = document.getElementById('fileName');
   const dirtyFlag = document.getElementById('dirtyFlag');
@@ -19,6 +28,9 @@
   const newStepText = document.getElementById('newStepText');
   const newStepIndex = document.getElementById('newStepIndex');
   const btnAddStep = document.getElementById('btnAddStep');
+  const continueRunningEl = document.getElementById('continueRunning');
+  let currentIndex = 0;
+  let continueRunning = false;  
 
   function log(line) {
     const div = document.createElement('div');
@@ -26,6 +38,29 @@
     logEl.appendChild(div);
     logEl.scrollTop = logEl.scrollHeight;
   }
+
+  function fetcher(fn) {
+      let timer = null;
+      const cancel = () => {
+          if (timer !== null) {
+              clearTimeout(timer);
+              timer = null;
+          }
+      };
+      
+  const fire = (timeout) => {
+      cancel();
+      timer = setTimeout(() => {
+          fn();
+          timer = null;
+      }, timeout);
+  };
+
+    return { 
+        cancel,
+        fire
+    };
+}
 
   // SSE events
   const es = new EventSource('/events');
@@ -35,15 +70,35 @@
       if (data.type === 'step') {
         stepStatus.textContent = `步骤 ${data.index}/${data.total}`;
         stepAction.textContent = data.action || '';
+        // 记录当前索引（将 1-based 转为 0-based）
+        if (typeof data.index === 'number') 
+          currentIndex = Math.max(0, Number(data.index) - 1);
+
+
+        ruleLast.textContent = rule.textContent || '';
+        patternLast.textContent = pattern.textContent || '';
+        scriptOutLast.textContent = scriptOut.textContent || '';
+
         rule.textContent = data.translation?.rule || '';
         pattern.textContent = data.translation?.pattern || '';
-        if (data.translation?.code) scriptOut.textContent = data.translation.code;
+        scriptOut.textContent = data.translation?.code || '';
       } else if (data.type === 'script') {
-        scriptOut.textContent = typeof data.script === 'string' ? data.script : JSON.stringify(data.script, null, 2);
+        const txt = typeof data.script === 'string' ? data.script : JSON.stringify(data.script, null, 2);
+        const prev = scriptOut.textContent || '';
+        // 合并脚本输出，避免重复显示
+        
+        scriptOut.textContent = prev.endsWith(txt) ? prev : `${prev}\n---\n${txt}`;
         log('已发送脚本');
       } else if (data.type === 'result') {
-        resultOut.textContent = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+        const txt = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+        // const prev = resultOut.textContent || '';
+        resultOutLast.textContent =  txt;
+        // 显示已完成的步骤信息
+        if (lastDoneStep) lastDoneStep.textContent = data.step || '';
         log('收到执行结果');
+        if(continueRunning && data.continueRunning){
+          fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: "e" }) });
+        }
       } else if (data.type === 'error') {
         log('错误: ' + data.message);
       } else if (data.type === 'log') {
@@ -66,8 +121,13 @@
   // Toolbar actions
   document.querySelectorAll('button[data-action]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: btn.dataset.action }) });
+        await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: btn.dataset.action }) });
     });
+  });
+
+  continueRunningEl.addEventListener('change', (e) => {
+    continueRunning = e.target.checked;
+   
   });
 
   // Send custom NL/script
@@ -76,7 +136,66 @@
     const text = customText.value.trim();
     if (!text) return;
     await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: { kind: mode, text } }) });
-    customText.value = '';
+    // 保持输入框内容，直到用户手动修改或删除
+    // 更新“即将发送脚本”预览
+    if (pendingScriptOut) {
+      pendingScriptOut.textContent = text;
+      pendingRule.textContent = '将在执行时解析';
+      pendingPattern.textContent = '将在执行时解析';
+    }
+  });
+
+  const { fire, cancel} = fetcher(async ()=>{
+      const text = customText.value.trim();
+      if (!text) {
+        rule.textContent = '';
+        pattern.textContent = '';
+        return;
+      }
+      try {
+        const res = await fetch('/translate_preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+        const json = await res.json();
+        if (!json.ok) {
+          rule.textContent = '解析失败';
+          pattern.textContent = '';
+          return;
+        }
+        if (json.matchedRule) {
+          rule.textContent = json.matchedRule || '';
+          pattern.textContent = json.matchedPattern || '';
+          scriptOut.textContent = json.code || '';
+        } else {
+          rule.textContent = '不能匹配规则';
+          pattern.textContent = '';
+          scriptOut.textContent = '';
+        }
+      } catch (e) {
+        rule.textContent = '解析异常';
+        pattern.textContent = '';
+        scriptOut.textContent = '';
+      }
+    }); 
+  // 输入变更时实时解析并在 section 显示匹配结果
+  customText.addEventListener('input', async () => {
+    //如果变化后超过1秒，才发送请求
+     fire(500);
+   
+  });
+
+  // 从输入框添加步骤（插入到当前步骤之前）
+  addFromInputBtn?.addEventListener('click', async () => {
+    const text = customText.value.trim();
+    if (!text) return;
+    try {
+      const res = await fetch('/steps/add', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, index: currentIndex }) });
+      const json = await res.json();
+      if (!json.ok) log('添加失败: ' + json.error); else {
+        log(`已在第 ${currentIndex} 步之前插入新步骤`);
+        await loadState();
+      }
+    } catch (err) {
+      log('添加步骤异常: ' + (err?.message || String(err)));
+    }
   });
 
   // Save to file (with backup)
@@ -125,15 +244,7 @@
       item.draggable = true;
       const text = document.createElement('span');
       text.textContent = `${idx + 1}. ${s}`;
-      const btnUp = document.createElement('button'); btnUp.textContent = '上移'; btnUp.dataset.op = 'up';
-      const btnDown = document.createElement('button'); btnDown.textContent = '下移'; btnDown.dataset.op = 'down';
-      const btnEdit = document.createElement('button'); btnEdit.textContent = '编辑'; btnEdit.dataset.op = 'edit';
-      const btnDel = document.createElement('button'); btnDel.textContent = '删除'; btnDel.dataset.op = 'delete';
       item.appendChild(text);
-      item.appendChild(btnUp);
-      item.appendChild(btnDown);
-      item.appendChild(btnEdit);
-      item.appendChild(btnDel);
       item.addEventListener('dragstart', (e) => {
         e.dataTransfer?.setData('text/plain', String(idx));
         item.classList.add('dragging');
@@ -158,7 +269,7 @@
         const currentText = item.querySelector('span')?.textContent?.replace(/^\d+\.\s*/, '') || '';
         const next = prompt('编辑步骤（自然语言）', currentText || '');
         if (next && next.trim()) {
-          const res = await fetch('/steps/update', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ index: idx, action: next.trim() }) });
+          const res = await fetch('/steps/update', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ index: idx, text: next.trim() }) });
           const json = await res.json();
           if (!json.ok) log('更新失败: ' + json.error); else await loadState();
         }
@@ -210,7 +321,7 @@
     const idxStr = newStepIndex?.value?.trim();
     const index = idxStr ? parseInt(idxStr, 10) : undefined;
     try {
-      const res = await fetch('/steps/add', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(index !== undefined && !isNaN(index) ? { action: text, index } : { action: text }) });
+      const res = await fetch('/steps/add', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(index !== undefined && !isNaN(index) ? { text, index } : { text }) });
       const json = await res.json();
       if (!json.ok) log('添加失败: ' + json.error); else {
         log('已添加步骤');
@@ -230,6 +341,8 @@
     fileName.textContent = json.file || '';
     dirtyFlag.textContent = json.dirty ? '(未保存改动)' : '';
     renderSteps((json.steps || []).map((s) => s.action || s));
+    // 记录当前索引（0-based）
+    if (typeof json.index === 'number') currentIndex = Math.max(0, Number(json.index));
     versionList.innerHTML = '';
     (json.versions || []).forEach((v) => {
       const opt = document.createElement('option');
@@ -241,6 +354,16 @@
       autoAddOnSuccessEl.checked = !!json.settings.autoAddOnSuccess;
     }
   }
+
+  // 输入预览：更新“即将发送脚本”区域
+  customText.addEventListener('input', () => {
+    const text = customText.value;
+    if (pendingScriptOut) {
+      pendingScriptOut.textContent = text || '';
+      pendingRule.textContent = text ? '将在执行时解析' : '';
+      pendingPattern.textContent = text ? '将在执行时解析' : '';
+    }
+  });
 
   // Initial state
   loadState().catch(() => {});

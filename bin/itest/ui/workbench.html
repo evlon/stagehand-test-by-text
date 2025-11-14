@@ -28,8 +28,9 @@
       <h1>测试工作台</h1>
       <div class="toolbar">
         <button data-action="e">执行</button>
+        <input type="checkbox" value="c" id="continueRunning" /><label for="continueRunning"> 连续运行</label>
         <button data-action="s">跳过</button>
-        <button data-action="c">连续运行</button>
+
         <button id="btnSave">保存到文件</button>
         <button data-action="q">退出</button>
       </div>
@@ -48,6 +49,7 @@
           <label><input type="radio" name="mode" value="nl" checked /> 自然语言</label>
           <label><input type="radio" name="mode" value="script" /> Stagehand 脚本</label>
           <button id="sendCustom">发送</button>
+          <button id="addFromInput">添加步骤</button>
         </div>
         <textarea id="customText" placeholder="输入自然语言或脚本…"></textarea>
       </section>
@@ -56,16 +58,13 @@
         <h2>翻译与执行</h2>
         <div class="row"><label>匹配规则:</label><span id="rule"></span></div>
         <div class="row"><label>匹配模式:</label><span id="pattern"></span></div>
-        <div class="row"><label>规则更新:</label><span id="rulesUpdate" class="status"></span></div>
         <div class="sep"></div>
         <h2>发送脚本</h2>
         <pre id="scriptOut"></pre>
         <div class="sep"></div>
-        <h2>返回结果</h2>
-        <pre id="resultOut"></pre>
       </section>
 
-      <section class="card" style="grid-column: 1 / span 2">
+      <section class="card">
         <h2>测试步骤管理</h2>
         <div class="row">
           <label class="status">文件:</label><span id="fileName" class="status"></span>
@@ -77,13 +76,18 @@
           <button id="btnCheckout">回滚到版本</button>
         </div>
         <div id="steps" class="log"></div>
-        <div class="row" style="margin-top: 8px; gap: 8px;">
-          <input id="newStepText" type="text" placeholder="新增步骤的自然语言" style="flex:1; padding: 6px; border-radius: 6px; border: 1px solid #334155; background:#0b1020; color:#e6e6e6;" />
-          <input id="newStepIndex" type="number" min="0" placeholder="插入索引(可选)" style="width: 140px; padding: 6px; border-radius: 6px; border: 1px solid #334155; background:#0b1020; color:#e6e6e6;" />
-          <button id="btnAddStep">添加步骤</button>
-        </div>
       </section>
-
+      <section class="card">
+        <h2>上次翻译与执行</h2>
+        <div class="row"><label>匹配规则:</label><span id="ruleLast"></span></div>
+        <div class="row"><label>匹配模式:</label><span id="patternLast"></span></div>
+        <div class="sep"></div>
+        <h2>上次发送脚本</h2>
+        <pre id="scriptOutLast"></pre>
+        <div class="sep"></div>
+        <h2>上次返回结果</h2>
+        <pre id="resultOutLast"></pre>
+      </section>
       <section class="card" style="grid-column: 1 / span 2">
         <h2>日志</h2>
         <div class="log" id="log"></div>

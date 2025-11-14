@@ -5,6 +5,8 @@ import { existsSync, mkdirSync } from "fs";
 import { Translator } from "../translator/index.js";
 import StagehandManager from "../../../setup/stagehand-setup.js";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
 
 export class StepExecutor {
   constructor() {
@@ -19,23 +21,65 @@ export class StepExecutor {
     return await this.stagehandManager.getStagehandForWorkflow(workflow);
   }
 
-  async executeStep(stepInfo) {
+  // 将步骤编译为可执行函数，便于在调试中预览“即将执行”的内容
+  compileStep(stepInfo) {
     const { action, workflow, comment } = stepInfo;
+    // const expandedAction = this.expandEnv(action);
+    let translation = this.translator.translate(action);
+    const expandedAction = translation.action;
+    // 针对 URL 导航类规则，先对 URL 参数进行清洗并重新渲染代码
+    // if (translation.engine === "rules" && (translation.matchedRule || "").startsWith("goto_url")) {
+    //   const cleanedUrl = this._sanitizeUrlParam(translation.params?.url);
+    //   if (cleanedUrl) {
+    //     translation.params.url = cleanedUrl;
+    //     if (translation.template) {
+    //       translation.code = this.translator.renderTemplate(translation.template, translation.params);
+    //     }
+    //   }
+    // }
+
+    // 若非 rules 引擎，切换到“默认规则”以保证统一基于 rules 执行
+    if (translation.engine !== "rules") {
+      const defaultTemplate = "await stagehand.act('{text}')";
+      const params = { text: expandedAction };
+      const code = this.translator.renderTemplate(defaultTemplate, params);
+      translation = {
+        engine: "rules",
+        matchedRule: "__default_act__",
+        matchedPattern: null,
+        params,
+        template: defaultTemplate,
+        code,
+        type: this.translator.inferTypeFromTemplate(defaultTemplate),
+      };
+    }
+
+    // 生成一个可执行的函数，签名为 (stagehand, z, expect, page)
+    const compiled = async (stagehand, zParam, expectParam, page) => {
+      const runner = new Function(
+        "stagehand",
+        "z",
+        "expect",
+        "page",
+        "path",
+        "fs",
+        `return (async () => { return ${translation.code} })();`
+      );
+      return await runner(stagehand, zParam, expectParam, page, path,fs);
+    };
+
+    // 附带元信息，供预览/执行阶段使用
+    compiled.__meta = { action, workflow, comment, expandedAction, translation };
+    return compiled;
+  }
+
+  // 执行已编译的步骤函数，并记录历史与日志
+  async executeCompiledStep(compiled) {
+    const { action, workflow, comment, expandedAction, translation } = compiled.__meta || {};
     const stagehand = await this.getStagehandForWorkflow(workflow);
+    // 取活动的页面
     const page = stagehand.context.pages()[0];
 
-    const expandedAction = this._expandEnv(action);
-    const translation = this.translator.translate(expandedAction);
-    // 针对 URL 导航类规则，先对 URL 参数进行清洗并重新渲染代码
-    if (translation.engine === "rules" && (translation.matchedRule || "").startsWith("goto_url")) {
-      const cleanedUrl = this._sanitizeUrlParam(translation.params?.url);
-      if (cleanedUrl) {
-        translation.params.url = cleanedUrl;
-        if (translation.template) {
-          translation.code = this.translator.renderTemplate(translation.template, translation.params);
-        }
-      }
-    }
     const start = Date.now();
     try {
       if (comment) console.log(`   💡 ${comment}`);
@@ -49,40 +93,20 @@ export class StepExecutor {
         const codePreview = (translation.code || "").toString();
         console.log(`      🧪 生成代码片段:\n${codePreview}`);
       }
-      let result;
 
-      if (translation.engine === "rules") {
-        // Evaluate template code string inside an async function with context
-        const runner = new Function(
-          "stagehand",
-          "z",
-          "expect",
-          "page",
-          `return (async () => { ${translation.code} })();`
-        );
-        // 提供一个轻量 expect shim，避免在非 Vitest 环境直接导入 Vitest
-        const expectShim = (actual) => ({
-          toBe(expected) {
-            if (actual !== expected) throw new Error(`expected ${actual} to be ${expected}`);
-          },
-          toEqual(expected) {
-            const a = JSON.stringify(actual);
-            const b = JSON.stringify(expected);
-            if (a !== b) throw new Error(`expected ${a} to equal ${b}`);
-          },
-        });
-        result = await runner(stagehand, z, expectShim, page);
-      } else if (translation.engine === "agent") {
-        const agent = stagehand.agent({
-          systemPrompt: "你是一个专业的网页自动化助手，能够准确执行用户指令并完成网页操作。",
-        });
-        const res = await agent.execute({ instruction: translation.code, maxSteps: 20, acceptUserFeedback: false });
-        result = { steps: res.steps?.length || 0, result: res.result, error: res.error, completed: res.completed };
-      } else {
-        // Default to act if unknown
-        result = await stagehand.act(action, { timeout: 30000, retries: 2 });
-      }
+      // 轻量 expect shim，避免在非 Vitest 环境直接导入 Vitest
+      const expectShim = (actual) => ({
+        toBe(expected) {
+          if (actual !== expected) throw new Error(`expected ${actual} to be ${expected}`);
+        },
+        toEqual(expected) {
+          const a = JSON.stringify(actual);
+          const b = JSON.stringify(expected);
+          if (a !== b) throw new Error(`expected ${a} to equal ${b}`);
+        },
+      });
 
+      const result = await compiled(stagehand, z, expectShim, page);
       const duration = Date.now() - start;
       this.executionHistory.push({ action, type: translation.type, success: true, duration, workflow, timestamp: new Date().toISOString() });
       console.log(`   ✅ 步骤执行成功 (${duration}ms)`);
@@ -91,7 +115,7 @@ export class StepExecutor {
       const duration = Date.now() - start;
       // 增强错误输出，包含规则、模式、参数与代码片段，便于快速定位
       let detailedMessage = error?.message || String(error);
-      if (translation.engine === "rules") {
+      if (translation?.engine === "rules") {
         const context = [
           `规则: ${translation.matchedRule || "(未知)"}`,
           translation.matchedPattern ? `模式: ${translation.matchedPattern}` : null,
@@ -100,19 +124,19 @@ export class StepExecutor {
         ].filter(Boolean).join("\n");
         detailedMessage = `规则执行失败:\n${context}\n原始错误: ${detailedMessage}`;
       }
-      this.executionHistory.push({ action, type: translation.type, success: false, error: detailedMessage, duration, workflow, timestamp: new Date().toISOString() });
+      this.executionHistory.push({ action, type: translation?.type, success: false, error: detailedMessage, duration, workflow, timestamp: new Date().toISOString() });
       console.log(`   ❌ 失败: ${action}`);
       console.log(`      错误: ${detailedMessage}`);
-      return { success: false, action, type: translation.type, error: detailedMessage, duration, workflow };
+      return { success: false, action, type: translation?.type, error: detailedMessage, duration, workflow };
     }
   }
 
-  _expandEnv(text) {
-    return text.replace(/%(\w+)%/g, (_, name) => {
-      const v = process.env[name];
-      return typeof v === "string" && v.length > 0 ? v : `%${name}%`;
-    });
+  async executeStep(stepInfo) {
+    const compiled = this.compileStep(stepInfo);
+    return await this.executeCompiledStep(compiled);
   }
+
+
 
   _sanitizeUrlParam(value) {
     if (!value || typeof value !== "string") return value;
