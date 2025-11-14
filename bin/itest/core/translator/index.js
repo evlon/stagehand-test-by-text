@@ -154,6 +154,13 @@ export class Translator {
     if (template.includes("stagehand.act")) return "act";
     return "act";
   }
+
+  reload() {
+    // 重新加载参数模式与规则集，用于热重载
+    this.paramPatterns = this.loadParamPatterns();
+    this.rules = this.loadRules();
+    return { rules: this.rules?.length || 0 };
+  }
 }
 
 // CLI usage (optional)
