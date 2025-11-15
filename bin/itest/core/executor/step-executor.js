@@ -64,7 +64,7 @@ export class StepExecutor {
         "page",
         "path",
         "fs",
-        `return (async () => { return ${translation.code} })();`
+        `return (async () => {  const result = ${translation.code}; return {title:page.title(),url:page.url(), result:result}; })();`
       );
       return await runner(stagehand,stagehand.context, zParam, expectParam, page, path,fs);
     };

@@ -16,7 +16,7 @@ rules:
   - name: "input_action"
     patterns:
       - "在{field}中输入{value}"
-    template: "await stagehand.act('在 {field} 中输入 {value}')"
+    template: "await stagehand.act('在 {field} 中输入 {value}',{page})"
     validation:
       required: ["field", "value"]
 
@@ -27,7 +27,10 @@ rules:
       {
         const result = await stagehand.extract(
           "检查页面是否包含文本 {text}",
-          z.object({ found: z.boolean() })
+          {
+            page,
+            schema: z.object({ found: z.boolean() })
+          }
         );
         if (!result.found) {
           throw new Error(`未找到文本: ${'{text}'}`);
@@ -73,6 +76,6 @@ rules:
   - name: "default_act"
     patterns:
       - "{action}"
-    template: "await stagehand.act('{action}')"
+    template: "await stagehand.act('{action},{page}')"
     validation:
       required: ["action"]
