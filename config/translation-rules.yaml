@@ -5,24 +5,13 @@ rules:
       - "打开|{url}"
       - "访问|{url}"
       - "导航到|{url}"
+      - "打开|{lebel}|{url}"
+      - "访问|{lebel}|{url}"
+      - "导航到|{lebel}|{url}"
     template: |
       await page.goto('{url}');    
     validation:
       required: ["url"]
-  - name: "click_action"
-    patterns:
-      - "点击{element}"
-      - "选择{element}"
-    template: "await stagehand.act('点击 {element}')"
-    validation:
-      required: ["element"]
-  - name: "click_selector"
-    patterns:
-      - "点击{selector}"
-      - "Click {selector}"
-    template: "await page.click('{selector}')"
-    validation:
-      required: ["selector"]
 
   - name: "input_action"
     patterns:
@@ -30,15 +19,6 @@ rules:
     template: "await stagehand.act('在 {field} 中输入 {value}')"
     validation:
       required: ["field", "value"]
-
-  - name: "input_text"
-    patterns:
-      - "在{selector}输入{text}"
-      - "在{selector}中输入{text}"
-      - "输入{text}到{selector}"
-    template: "await page.fill('{selector}', '{text}')"
-    validation:
-      required: ["selector", "text"]
 
   - name: "assertion"
     patterns:
@@ -53,62 +33,8 @@ rules:
           throw new Error(`未找到文本: ${'{text}'}`);
         }
       }
-  - name: "assert_text_visible"
-    patterns:
-      - "应显示{text}"
-      - "{text}应可见"
-    template: |
-      const visible = await page.locator(`text=${'{text}'}`).first().isVisible();
-      expect(visible).toBe(true);
-    validation:
-      required: ["text"]
-
-  - name: "assert_selector_contains_text"
-    patterns:
-      - "{selector}|包含{text}"
-      - "应该|{selector}|包含|{text}"
-    template: |
-      const content = await page.locator('{selector}').first().innerText();
-      expect(content.includes('{text}')).toBe(true);
-    validation:
-      required: ["selector", "text"]
-
-  - name: "wait_text_visible"
-    patterns:
-      - "等待|文字|{text}|可见"
-      - "等待|出现|文字|{text}|"
-    template: |
-      {
-        const locator = page.locator(`text=${'{text}'}`).first();
-        const start = Date.now();
-        let ok = false;
-        while (Date.now() - start < 30000) {
-          try { if (await locator.isVisible()) { ok = true; break; } } catch {}
-          await new Promise(r => setTimeout(r, 300));
-        }
-        if (!ok) { throw new Error(`等待文本可见超时: ${'{text}'}`); }
-      }
-    validation:
-      required: ["text"]
-
-  - name: "wait_for_selector_visible"
-    patterns:
-      - "等待|{selector}|可见"
-      - "等待|{selector}"
-    template: |
-      {
-        const locator = page.locator('{selector}').first();
-        const start = Date.now();
-        let ok = false;
-        while (Date.now() - start < 30000) {
-          try { if (await locator.isVisible()) { ok = true; break; } } catch {}
-          await new Promise(r => setTimeout(r, 300));
-        }
-        if (!ok) { throw new Error(`等待元素可见超时: ${'{selector}'}`); }
-      }
-    validation:
-      required: ["selector"]
-
+ 
+ 
   - name: "wait_ms"
     patterns:
       - "等待{ms}毫秒"
@@ -116,22 +42,6 @@ rules:
     template: "await new Promise(r => setTimeout(r, {ms}))"
     validation:
       required: ["ms"]
-
-  - name: "select_dropdown"
-    patterns:
-      - "选择|{selector}|为|{value}"
-      - "下拉框|{selector}|选择|{value}"
-    template: "await page.selectOption('{selector}', '{value}')"
-    validation:
-      required: ["selector", "value"]
-
-  - name: "hover_selector"
-    patterns:
-      - "悬停|{selector}"
-      - "hover|{selector}"
-    template: "await page.hover('{selector}')"
-    validation:
-      required: ["selector"]
 
   - name: "screenshot"
     patterns:
@@ -152,3 +62,17 @@ rules:
       fs.writeFileSync(filePath, screenshotBuffer);
     validation:
       required: ["imagefilename"]
+
+  - name: "default_agent"
+    patterns:
+      - "运行|{action}"
+    template: "await stagehand.agent('{action}')"
+    validation:
+      required: ["action"]
+ 
+  - name: "default_act"
+    patterns:
+      - "{action}"
+    template: "await stagehand.act('{action}')"
+    validation:
+      required: ["action"]

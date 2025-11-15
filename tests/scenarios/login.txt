@@ -4,8 +4,8 @@
 
 ## 测试用例: 成功登录
 # 使用有效凭据测试正常登录流程
-打开|登录页面|%TEST_BASE_URL%
-等待页面上登录可见
+打开登录页面%TEST_BASE_URL%
+等待登录可见
 在用户名输入框中输入 %TEST_USER_NAME%
 在密码输入框中输入 %TEST_USER_PASSWORD%
 点击登录按钮

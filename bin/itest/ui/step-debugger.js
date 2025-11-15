@@ -509,8 +509,13 @@ function startWorkbenchServer(state, runner) {
         if (existsSync(corePath)) {
           import('fs').then(({ watch }) => {
             const w = watch(corePath, { persistent: true }, () => {
-              try { runner.stepExecutor.translator.reload(); emit({ type: 'rules_updated', file: 'core.yaml' }); }
-              catch (e) { emit({ type: 'error', message: `核心配置重载失败: ${e.message}` }); }
+              try { 
+                runner.stepExecutor.translator.reload(); emit({ type: 'rules_updated', file: 'core.yaml' }); 
+              }
+              catch (e) { 
+               
+                emit({ type: 'error', message: `核心配置重载失败: ${e.message}` }); 
+              }
             });
             try { watchers.push(w); } catch {}
           });

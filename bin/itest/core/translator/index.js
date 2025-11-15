@@ -35,6 +35,7 @@ export class Translator {
       }));
     } catch (e) {
       console.error("❌ 加载转义规则失败:", e.message);
+      process.exit(1);
       return [];
     }
   }

@@ -2,7 +2,7 @@
 // import {createOpenAICompatible} from "@ai-sdk/openai-compatible";
 // import {createOpenAI} from "@ai-sdk/openai";
 import { LLMClient, validateZodSchema} from "@browserbasehq/stagehand";
-import zodToJsonSchema from "zod-to-json-schema";
+import {zodToJsonSchema} from "openai-zod-to-json-schema";
 import { OpenAI } from "openai";
 
 class DeepseekAIClient extends LLMClient {
