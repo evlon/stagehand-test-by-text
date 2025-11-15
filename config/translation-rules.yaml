@@ -9,7 +9,7 @@ rules:
       - "访问|{lebel}|{url}"
       - "导航到|{lebel}|{url}"
     template: |
-      await page.goto('{url}');    
+      await context.newPage('{url}');    
     validation:
       required: ["url"]
 

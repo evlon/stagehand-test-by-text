@@ -5,7 +5,7 @@ import { LLMClient, validateZodSchema} from "@browserbasehq/stagehand";
 import {zodToJsonSchema} from "openai-zod-to-json-schema";
 import { OpenAI } from "openai";
 
-class DeepseekAIClient extends LLMClient {
+class ChatUAIClient extends LLMClient {
   constructor({
     logger,
     modelName,
@@ -16,18 +16,18 @@ class DeepseekAIClient extends LLMClient {
     modelName,
     clientOptions,
   });
-    this.type = "deepseek";
+    this.type = "chatu";
     this.modelName = modelName;
     this.logger = logger;
     this.clientOptions = clientOptions;
-    const modelNameToUse = this.modelName.startsWith("deepseek/")
+    this.modelNameToUse = this.modelName.startsWith("chatu/")
       ? this.modelName.split("/")[1]
       : this.modelName;
 
     this.client = new OpenAI({
-      baseURL: "https://api.deepseek.com/v1",
+      modelName: this.modelNameToUse,
+      baseURL: "https://jiutian.10086.cn/largemodel/moma/api/v3/",
       ...clientOptions,
-      
     });
 
   }
@@ -40,7 +40,7 @@ class DeepseekAIClient extends LLMClient {
     const { requestId, ...optionsWithoutImageAndRequestId } = options;
 
     logger({
-      category: "deepseek",
+      category: "jiutian",
       message: "creating chat completion",
       level: 2,
       auxiliary: {
@@ -96,7 +96,7 @@ class DeepseekAIClient extends LLMClient {
         responseFormat = { type: "json_object" };
       } catch (error) {
         logger({
-          category: "deepseek",
+          category: "chatu",
           message: "Failed to parse response model schema",
           level: 0,
         });
@@ -113,18 +113,18 @@ class DeepseekAIClient extends LLMClient {
       }
     }
 
-    const { response_model, ...deepseekOptions } = {
+    const { response_model, ...chatuOptions } = {
       ...optionsWithoutImageAndRequestId,
-      model: this.modelName,
+      model: this.modelNameToUse,
     };
 
     logger({
-      category: "deepseek",
+      category: "chatu",
       message: "creating chat completion",
       level: 2,
       auxiliary: {
-        deepseekOptions: {
-          value: JSON.stringify(deepseekOptions),
+        chatuOptions: {
+          value: JSON.stringify(chatuOptions),  
           type: "object",
         },
       },
@@ -186,12 +186,12 @@ class DeepseekAIClient extends LLMClient {
       return formattedMessage;
     });
 
-    const modelNameToUse = this.modelName.startsWith("deepseek/")
+    const modelNameToUse = this.modelName.startsWith("chatu/")
       ? this.modelName.split("/")[1]
       : this.modelName;
 
     const body = {
-      ...deepseekOptions,
+      ...chatuOptions,
       model: modelNameToUse,
       messages: formattedMessages,
       response_format: responseFormat,
@@ -207,7 +207,7 @@ class DeepseekAIClient extends LLMClient {
     };
 
      logger({
-      category: "deepseek",
+      category: "chatu",
       message: "request",
       level: 2,
       auxiliary: {
@@ -224,7 +224,7 @@ class DeepseekAIClient extends LLMClient {
     const response = await this.client.chat.completions.create(body);
 
     logger({
-      category: "deepseek",
+      category: "chatu",
       message: "response",
       level: 2,
       auxiliary: {
@@ -245,7 +245,7 @@ class DeepseekAIClient extends LLMClient {
       if (extractedData === null) {
         const errorMessage = "Response content is null.";
         logger({
-          category: "deepseek",
+          category: "chatu",
           message: errorMessage,
           level: 0,
         });
@@ -265,7 +265,7 @@ class DeepseekAIClient extends LLMClient {
         validateZodSchema(options.response_model.schema, parsedData);
       } catch (e) {
         logger({
-          category: "deepseek",
+          category: "chatu",
           message: "Response failed Zod schema validation",
           level: 0,
         });
@@ -279,8 +279,8 @@ class DeepseekAIClient extends LLMClient {
 
         if (e instanceof Error) {
           logger({
-            category: "deepseek",
-            message: `Error during Deepseek chat completion: ${e.message}`,
+            category: "chatu",
+            message: `Error during chatu chat completion: ${e.message}`,
             level: 0,
             auxiliary: {
               errorDetails: {
@@ -305,4 +305,4 @@ class DeepseekAIClient extends LLMClient {
   }
 }
 
-export { DeepseekAIClient };
+export { ChatUAIClient };

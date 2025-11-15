@@ -10,6 +10,72 @@ import "../../setup/env-setup.js"; // 加载 .env 与测试凭据，提供 %TEST
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+
+function shallowStringify(obj, options = {}) {
+    // 处理非对象类型
+    if (obj === null || typeof obj !== 'object') {
+        return JSON.stringify(obj);
+    }
+    
+    const result = {};
+    const {
+        maxDepth = 1,
+        exclude = [],
+        include = null,
+        handleFunctions = 'skip', // 'skip', 'stringify', 'replace'
+        handleUndefined = 'skip'  // 'skip', 'null'
+    } = options;
+    
+    for (let key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            // 排除特定属性
+            if (exclude.includes(key)) continue;
+            
+            // 如果指定了包含列表，只包含指定的属性
+            if (include && !include.includes(key)) continue;
+            
+            const value = obj[key];
+            
+            // 处理不同类型的值
+            if (value === undefined) {
+                if (handleUndefined === 'null') {
+                    result[key] = null;
+                }
+                // 如果 handleUndefined === 'skip'，则跳过
+            } else if (typeof value === 'function') {
+                if (handleFunctions === 'stringify') {
+                    result[key] = value.toString();
+                } else if (handleFunctions === 'replace') {
+                    result[key] = '[Function]';
+                }
+                // 如果 handleFunctions === 'skip'，则跳过
+            } else if (typeof value === 'object' && value !== null) {
+                if (maxDepth > 1) {
+                    // 递归处理，但减少深度
+                    result[key] = JSON.parse(shallowStringify(value, {
+                        ...options,
+                        maxDepth: maxDepth - 1
+                    }));
+                } else {
+                    // 达到最大深度，只显示类型信息
+                    if (Array.isArray(value)) {
+                        result[key] = `[Array: ${value.length} items]`;
+                    } else if (value instanceof Date) {
+                        result[key] = value.toISOString();
+                    } else {
+                        result[key] = `[Object: ${Object.keys(value).length} keys]`;
+                    }
+                }
+            } else {
+                // 基本类型直接赋值
+                result[key] = value;
+            }
+        }
+    }
+    
+    return JSON.stringify(result, null, options.space);
+}
+
 export class TextTestRunner {
   constructor() {
     this.stagehandManager = new StagehandManager();
@@ -82,7 +148,18 @@ export class TextTestRunner {
     return "shared-actions";
   }
 
-  async executeStep(stepInfo) { return await this.stepExecutor.executeStep(stepInfo); }
+  async executeStep(stepInfo) { 
+
+    const r = await this.stepExecutor.executeStep(stepInfo); 
+    r.result = r.result ? shallowStringify(r.result, {
+        maxDepth : 2,
+        exclude :[],
+        include : null,
+        handleFunctions :'skip', // 'skip', 'stringify', 'replace'
+        handleUndefined : 'skip'  // 'skip', 'null'
+    }): undefined;
+    return r;
+  }
 
   async runTestCase(testCase) {
     this.currentTestCase = testCase.name;

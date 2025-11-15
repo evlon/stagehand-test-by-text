@@ -13,10 +13,12 @@ import { TextTestRunner } from "../core/test-runner.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
-function prompt(question) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => rl.question(question, (ans) => { rl.close(); resolve(ans); }));
-}
+// function prompt(question) {
+//   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+//   return new Promise((resolve) => rl.question(question, (ans) => { rl.close(); resolve(ans); }));
+// }
+
+
 
 export async function debugFile(scenarioFileArg) {
   // 解析与创建文件: 支持传入文件名（相对）或绝对路径
@@ -122,7 +124,7 @@ export async function debugFile(scenarioFileArg) {
           if (!r.success) {
             wb.broadcast({ type: "error", message: r.error });
           } else {
-            wb.broadcast({ type: "result", step: newStep.action, result: r.result ?? true });
+            wb.broadcast({ type: "result", step: newStep.action, result: r.result ?? undefined });
             if (state.settings?.autoAddOnSuccess) {
               const idx = Number.isInteger(state.currentStepIndex) ? state.currentStepIndex + 1 : tc.steps.length;
               tc.steps.splice(idx, 0, { action: text, comment: null, workflow: newStep.workflow });
@@ -145,7 +147,7 @@ export async function debugFile(scenarioFileArg) {
         // 工作台模式，CLI 不再自动重试；可通过再次点击“执行”实现重试
       } else {
         console.log("✅ 成功");
-        wb.broadcast({ type: "result", step: stepInfo.action, result: result.result ?? true, continueRunning: i !== tc.steps.length - 1 });
+        wb.broadcast({ type: "result", step: stepInfo.action, result: result.result ?? undefined, continueRunning: i !== tc.steps.length - 1 });
       }
     }
   }

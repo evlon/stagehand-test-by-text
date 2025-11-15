@@ -58,6 +58,7 @@ export class StepExecutor {
     const compiled = async (stagehand, zParam, expectParam, page) => {
       const runner = new Function(
         "stagehand",
+        "context",
         "z",
         "expect",
         "page",
@@ -65,7 +66,7 @@ export class StepExecutor {
         "fs",
         `return (async () => { return ${translation.code} })();`
       );
-      return await runner(stagehand, zParam, expectParam, page, path,fs);
+      return await runner(stagehand,stagehand.context, zParam, expectParam, page, path,fs);
     };
 
     // 附带元信息，供预览/执行阶段使用
@@ -78,7 +79,7 @@ export class StepExecutor {
     const { action, workflow, comment, expandedAction, translation } = compiled.__meta || {};
     const stagehand = await this.getStagehandForWorkflow(workflow);
     // 取活动的页面
-    const page = stagehand.context.pages()[0];
+    const page = stagehand.context.activePage();
 
     const start = Date.now();
     try {
@@ -138,21 +139,21 @@ export class StepExecutor {
 
 
 
-  _sanitizeUrlParam(value) {
-    if (!value || typeof value !== "string") return value;
-    let v = value.trim();
-    // 去除反引号或引号包裹
-    if ((v.startsWith("`") && v.endsWith("`")) || (v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
-      v = v.slice(1, -1).trim();
-    }
-    // 从文本中提取第一个 URL（修复“登录页面 https://...”这类混合文本）
-    const m = v.match(/https?:\/\/[^\s'"\)]+/);
-    if (m) {
-      v = m[0];
-      // 校验格式
-      try { new URL(v); return v; } catch { /* fallthrough */ }
-    }
-    // 若未匹配到 URL，保留原值（可能包含未展开的占位符），供后续环境扩展或报错信息使用
-    return v;
-  }
+  // _sanitizeUrlParam(value) {
+  //   if (!value || typeof value !== "string") return value;
+  //   let v = value.trim();
+  //   // 去除反引号或引号包裹
+  //   if ((v.startsWith("`") && v.endsWith("`")) || (v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
+  //     v = v.slice(1, -1).trim();
+  //   }
+  //   // 从文本中提取第一个 URL（修复“登录页面 https://...”这类混合文本）
+  //   const m = v.match(/https?:\/\/[^\s'"\)]+/);
+  //   if (m) {
+  //     v = m[0];
+  //     // 校验格式
+  //     try { new URL(v); return v; } catch { /* fallthrough */ }
+  //   }
+  //   // 若未匹配到 URL，保留原值（可能包含未展开的占位符），供后续环境扩展或报错信息使用
+  //   return v;
+  // }
 }

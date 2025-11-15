@@ -5,7 +5,7 @@ import { LLMClient, validateZodSchema} from "@browserbasehq/stagehand";
 import {zodToJsonSchema} from "openai-zod-to-json-schema";
 import { OpenAI } from "openai";
 
-class DeepseekAIClient extends LLMClient {
+class JiuTianAIClient extends LLMClient {
   constructor({
     logger,
     modelName,
@@ -16,18 +16,17 @@ class DeepseekAIClient extends LLMClient {
     modelName,
     clientOptions,
   });
-    this.type = "deepseek";
+    this.type = "jiutian";
     this.modelName = modelName;
     this.logger = logger;
     this.clientOptions = clientOptions;
-    const modelNameToUse = this.modelName.startsWith("deepseek/")
+    const modelNameToUse = this.modelName.startsWith("jiutian/")
       ? this.modelName.split("/")[1]
       : this.modelName;
 
     this.client = new OpenAI({
-      baseURL: "https://api.deepseek.com/v1",
+      baseURL: "https://jiutian.10086.cn/largemodel/moma/api/v3/",
       ...clientOptions,
-      
     });
 
   }
@@ -40,7 +39,7 @@ class DeepseekAIClient extends LLMClient {
     const { requestId, ...optionsWithoutImageAndRequestId } = options;
 
     logger({
-      category: "deepseek",
+      category: "jiutian",
       message: "creating chat completion",
       level: 2,
       auxiliary: {
@@ -96,7 +95,7 @@ class DeepseekAIClient extends LLMClient {
         responseFormat = { type: "json_object" };
       } catch (error) {
         logger({
-          category: "deepseek",
+          category: "jiutian",
           message: "Failed to parse response model schema",
           level: 0,
         });
@@ -113,18 +112,18 @@ class DeepseekAIClient extends LLMClient {
       }
     }
 
-    const { response_model, ...deepseekOptions } = {
+    const { response_model, ...jiutianOptions } = {
       ...optionsWithoutImageAndRequestId,
       model: this.modelName,
     };
 
     logger({
-      category: "deepseek",
+      category: "jiutian",
       message: "creating chat completion",
       level: 2,
       auxiliary: {
-        deepseekOptions: {
-          value: JSON.stringify(deepseekOptions),
+        jiutianOptions: {
+          value: JSON.stringify(jiutianOptions),
           type: "object",
         },
       },
@@ -186,12 +185,12 @@ class DeepseekAIClient extends LLMClient {
       return formattedMessage;
     });
 
-    const modelNameToUse = this.modelName.startsWith("deepseek/")
+    const modelNameToUse = this.modelName.startsWith("jiutian/")
       ? this.modelName.split("/")[1]
       : this.modelName;
 
     const body = {
-      ...deepseekOptions,
+      ...jiutianOptions,
       model: modelNameToUse,
       messages: formattedMessages,
       response_format: responseFormat,
@@ -207,7 +206,7 @@ class DeepseekAIClient extends LLMClient {
     };
 
      logger({
-      category: "deepseek",
+      category: "jiutian",
       message: "request",
       level: 2,
       auxiliary: {
@@ -224,7 +223,7 @@ class DeepseekAIClient extends LLMClient {
     const response = await this.client.chat.completions.create(body);
 
     logger({
-      category: "deepseek",
+      category: "jiutian",
       message: "response",
       level: 2,
       auxiliary: {
@@ -245,7 +244,7 @@ class DeepseekAIClient extends LLMClient {
       if (extractedData === null) {
         const errorMessage = "Response content is null.";
         logger({
-          category: "deepseek",
+          category: "jiutian",
           message: errorMessage,
           level: 0,
         });
@@ -265,7 +264,7 @@ class DeepseekAIClient extends LLMClient {
         validateZodSchema(options.response_model.schema, parsedData);
       } catch (e) {
         logger({
-          category: "deepseek",
+          category: "jiutian",
           message: "Response failed Zod schema validation",
           level: 0,
         });
@@ -279,8 +278,8 @@ class DeepseekAIClient extends LLMClient {
 
         if (e instanceof Error) {
           logger({
-            category: "deepseek",
-            message: `Error during Deepseek chat completion: ${e.message}`,
+            category: "jiutian",
+            message: `Error during JiuTian chat completion: ${e.message}`,
             level: 0,
             auxiliary: {
               errorDetails: {
@@ -305,4 +304,4 @@ class DeepseekAIClient extends LLMClient {
   }
 }
 
-export { DeepseekAIClient };
+export { JiuTianAIClient };

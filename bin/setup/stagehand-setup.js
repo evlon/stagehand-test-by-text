@@ -10,6 +10,8 @@ import {
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { DeepseekAIClient } from "./deepseek-safe-client.js";
+import { ChatUAIClient } from "./chatu-client.js";
+import { JiuTianAIClient } from "./jiutian-client.js";  
 // import { DeepseekAIClient } from "../deepseek-ai-client";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -89,7 +91,39 @@ class StagehandManager {
           }
         }),
       });
-    } else {    
+    } else if (modelConfig.modelName.indexOf("chatu/") != -1) {
+
+      stagehand = new Stagehand({
+        env: process.env.STAGEHAND_ENV || "LOCAL",
+        cacheDir: cacheDir,
+        modelName: modelConfig.modelName,
+
+        llmClient: new ChatUAIClient({
+          modelName: modelConfig.modelName,
+          logger: options.logger || function(msg){console.log(msg.category, msg.message, msg.level, msg.auxiliary)},
+          clientOptions: {
+            apiKey: process.env.CHATU_API_KEY || '',
+            baseURL: modelConfig.baseURL
+          }
+        }),
+      });
+    }else if (modelConfig.modelName.indexOf("jiutian/") != -1) {
+
+      stagehand = new Stagehand({
+        env: process.env.STAGEHAND_ENV || "LOCAL",
+        cacheDir: cacheDir,
+        modelName: modelConfig.modelName,
+
+        llmClient: new JiuTianAIClient({
+          modelName: modelConfig.modelName,
+          logger: options.logger || function(msg){console.log(msg.category, msg.message, msg.level, msg.auxiliary)},
+          clientOptions: {
+            apiKey: process.env.JIUTIAN_API_KEY || '',
+            baseURL: modelConfig.baseURL
+          }
+        }),
+      });
+    }else {    
 
       const stagehandConfig = {
         env: process.env.STAGEHAND_ENV || "LOCAL",
