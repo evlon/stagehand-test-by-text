@@ -1,7 +1,5 @@
-import { TextTestRunner} from "../../bin/itest/core/test-runner.js";
+import { TextTestRunner} from "../../bin/vitest/core/test-runner.js";
 import runnerContext from "../debug/runner-context.js";
-import {expect} from "vitest";
-runnerContext.expect =expect;
 const runner = new TextTestRunner();
 describe("文本测试: Test", () => {
   beforeAll(async () => { console.log("\n🚀 初始化测试套件: 文本测试: Test"); });

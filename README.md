@@ -143,12 +143,12 @@ pnpm test:ui
 为提升可维护性与扩展性，测试架构已完成升级并移除旧的兼容层：
 
 - 移除旧版 `bin/vitest/*` 兼容脚本，统一采用新版核心测试运行器。
-- 新的文本测试运行器位于 `bin/itest/core/test-runner.js`，通过 Vitest 生成并执行测试。
+- 新的文本测试运行器位于 `bin/vitest/core/test-runner.js`，通过 Vitest 生成并执行测试。
 - 命令行工具已更新：
   - `pnpm test:file <scenario.txt>`：只运行指定文本场景（示例：`pnpm test:file login.txt`）。
   - `pnpm test:changed`：根据 Git 变更直接运行对应的 Vitest 文件。
   - `pnpm test`：运行全部 Vitest 测试。
-- 规则驱动的自然语言解析器位于 `bin/itest/core/translator/`，其规则在 `config/translation-rules.yaml` 中维护。
+- 规则驱动的自然语言解析器位于 `bin/vitest/core/translator/`，其规则在 `config/translation-rules.yaml` 中维护。
   - 支持常见动作：打开页面、点击、输入、断言文本、等待元素可见、下拉选择、悬停、截图等。
   - 使用占位符 `{name}`、`{selector}`、`{text}`、`{url}` 等定义参数。
   - 示例：`打开 {url}`、`在 {selector} 中输入 {text}`、`页面应显示 {text}`、`等待 {selector} 可见`。

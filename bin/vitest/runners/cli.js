@@ -10,7 +10,7 @@ import yaml from "js-yaml";
 import readline from "readline";
 import { IncrementalExecutor } from "../core/executor/incremental-executor.js";
 import { TextTestRunner,determineWorkflow, shallowStringify } from "../core/test-runner.js";
-import { generateTestSuite } from '../../itest/core/test-runner.js';
+import { generateTestSuite } from '../core/test-runner.js';
 const args = process.argv.slice(2);
 const cmd = args[0];
 
@@ -151,7 +151,7 @@ try {
     case "test:debug": {
       const file = args[1];
       if (!file) { usage(); process.exit(1); }
-      run(`node bin/itest/ui/step-debugger.js ${file}`);
+      run(`node bin/vitest/ui/step-debugger.js ${file}`);
       break;
     }
 

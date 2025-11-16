@@ -21,7 +21,7 @@ translation:
   # 注意：这些正则会嵌入整体规则的 ^...$ 中，建议无需 ^/$ 锚点；若包含，会自动剥离
 
   test_template: |
-    import { TextTestRunner} from "../../bin/itest/core/test-runner.js";
+    import { TextTestRunner} from "../../bin/vitest/core/test-runner.js";
     import runnerContext from "../debug/runner-context.js";
     const runner = new TextTestRunner();
     describe("${suite:name}", () => {

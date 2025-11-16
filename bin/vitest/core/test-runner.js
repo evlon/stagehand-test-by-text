@@ -88,34 +88,34 @@ function determineWorkflow(textFilePath){
   return workflow;  
 }
 
-function createTestSuite(textFilePath) {
-  const runner = new TextTestRunner();
-  const workflow = determineWorkflow(textFilePath);
-  const testCases = runner.parseTextScenario(textFilePath,workflow);
-  const suiteName = `文本测试: ${textFilePath.split("/").pop().replace(/\.txt$/i, "").replace(/^(.)/, (m) => m.toUpperCase())}`;
-  return {
-    runner,
-    testCases,
-    suiteName,
-    async generateTests() {
-      const { describe, test, beforeAll, afterAll, afterEach } = await import("vitest");
-      describe(this.suiteName, () => {
-        beforeAll(async () => { console.log(`\n🚀 初始化测试套件: ${this.suiteName}`); });
-        afterEach(async () => {});
-        afterAll(async () => { await runner.stagehandManager.closeAll(); });
-        this.testCases.forEach((tc, i) => {
-          test(`TC${i + 1}: ${tc.name}`, async () => {
-            const result = await runner.runTestCase(runnerContext,tc);
-            if (!result.passed) {
-              const failed = result.steps.find((s) => !s.success);
-              throw new Error(`测试失败: ${failed?.error || "未知错误"}\n失败步骤: ${failed?.action}`);
-            }
-          }, 120000);
-        });
-      });
-    },
-  };
-}
+// function createTestSuite(textFilePath) {
+//   const runner = new TextTestRunner();
+//   const workflow = determineWorkflow(textFilePath);
+//   const testCases = runner.parseTextScenario(textFilePath,workflow);
+//   const suiteName = `文本测试: ${textFilePath.split("/").pop().replace(/\.txt$/i, "").replace(/^(.)/, (m) => m.toUpperCase())}`;
+//   return {
+//     runner,
+//     testCases,
+//     suiteName,
+//     async generateTests() {
+//       const { describe, test, beforeAll, afterAll, afterEach } = await import("vitest");
+//       describe(this.suiteName, () => {
+//         beforeAll(async () => { console.log(`\n🚀 初始化测试套件: ${this.suiteName}`); });
+//         afterEach(async () => {});
+//         afterAll(async () => { await runner.stagehandManager.closeAll(); });
+//         this.testCases.forEach((tc, i) => {
+//           test(`TC${i + 1}: ${tc.name}`, async () => {
+//             const result = await runner.runTestCase(runnerContext,tc);
+//             if (!result.passed) {
+//               const failed = result.steps.find((s) => !s.success);
+//               throw new Error(`测试失败: ${failed?.error || "未知错误"}\n失败步骤: ${failed?.action}`);
+//             }
+//           }, 120000);
+//         });
+//       });
+//     },
+//   };
+// }
 
 function generateTestSuite(textFilePath,templateConfig) {
   const runner = new TextTestRunner();
@@ -152,7 +152,7 @@ function generateTestSuite(textFilePath,templateConfig) {
   }));
 
   // testContent.push(`import { describe, test, beforeAll, afterAll, afterEach, expect } from "vitest";`);
-  // testContent.push(`import { TextTestRunner} from "../../bin/itest/core/test-runner.js";`);
+  // testContent.push(`import { TextTestRunner} from "../../bin/vitest/core/test-runner.js";`);
   // testContent.push(`import fs from "fs";`);
   // testContent.push(`import path from "path";`);
   // testContent.push(`import { z } from "zod";`);
@@ -286,4 +286,4 @@ class TextTestRunner {
   }
 }
 
-export { createTestSuite ,generateTestSuite,TextTestRunner ,shallowStringify ,determineWorkflow};
+export { generateTestSuite,TextTestRunner ,shallowStringify ,determineWorkflow};

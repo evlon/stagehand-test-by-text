@@ -258,13 +258,13 @@ function startWorkbenchServer(state, runner) {
     const server = http.createServer((req, res) => {
       const { pathname } = parseUrl(req.url || "");
       if (req.method === "GET" && pathname === "/") {
-        const html = readFileSync(join(process.cwd(), "bin", "itest", "ui", "workbench.html"), "utf-8");
+        const html = readFileSync(join(process.cwd(), "bin", "vitest", "ui", "workbench.html"), "utf-8");
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         res.end(html);
         return;
       }
       if (req.method === "GET" && pathname === "/client.js") {
-        const js = readFileSync(join(process.cwd(), "bin", "itest", "ui", "workbench.js"), "utf-8");
+        const js = readFileSync(join(process.cwd(), "bin", "vitest", "ui", "workbench.js"), "utf-8");
         res.writeHead(200, { "content-type": "application/javascript; charset=utf-8" });
         res.end(js);
         return;
