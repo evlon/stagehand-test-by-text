@@ -198,7 +198,8 @@ rules:
   - name: "default_script"
     patterns:
       - "脚本:{script}"
-    template: "{script}"
+    template: |
+      await (async () => { {script} })()
     validation:
       required: ["action"]
 

@@ -133,8 +133,10 @@
   // Send custom NL/script
   sendBtn.addEventListener('click', async () => {
     const mode = document.querySelector('input[name="mode"]:checked')?.value || 'nl';
-    const text = customText.value.trim();
+    let text = customText.value.trim();
     if (!text) return;
+
+    text = mode == "script" ? "脚本:" + text : text;
     await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: { kind: mode, text } }) });
     // 保持输入框内容，直到用户手动修改或删除
     // 更新“即将发送脚本”预览
@@ -146,14 +148,17 @@
   });
 
   const { fire, cancel} = fetcher(async ()=>{
-      const text = customText.value.trim();
+      let text = customText.value.trim();
       if (!text) {
         rule.textContent = '';
         pattern.textContent = '';
         return;
       }
+      
       try {
-        const res = await fetch('/translate_preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+        const mode = document.querySelector('input[name="mode"]:checked')?.value || 'nl';
+        text = mode == "script" ? "脚本:" + text : text;
+        const res = await fetch('/translate_preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({kind: mode, text }) });
         const json = await res.json();
         if (!json.ok) {
           rule.textContent = '解析失败';
@@ -184,9 +189,13 @@
 
   // 从输入框添加步骤（插入到当前步骤之前）
   addFromInputBtn?.addEventListener('click', async () => {
-    const text = customText.value.trim();
+    let text = customText.value.trim();
     if (!text) return;
     try {
+
+      const mode = document.querySelector('input[name="mode"]:checked')?.value || 'nl';
+      text = mode == "script" ? "脚本:" + text : text;
+
       const res = await fetch('/steps/add', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, index: currentIndex }) });
       const json = await res.json();
       if (!json.ok) log('添加失败: ' + json.error); else {
@@ -244,7 +253,10 @@
       item.draggable = true;
       const text = document.createElement('span');
       text.textContent = `${idx + 1}. ${s}`;
+      const btnDel = document.createElement('button'); btnDel.textContent = 'X'; btnDel.dataset.op = 'delete';
+
       item.appendChild(text);
+      item.appendChild(btnDel);
       item.addEventListener('dragstart', (e) => {
         e.dataTransfer?.setData('text/plain', String(idx));
         item.classList.add('dragging');

@@ -184,32 +184,91 @@ class TextTestRunner {
     this.currentTestCase = null;
   }
 
-  parseTextScenario(filePath,workflow) {
+  parseTextScenario(filePath, workflow) {
     const content = readFileSync(filePath, "utf-8");
     const lines = content.split("\n");
     const testCases = [];
 
     let currentTestCase = null;
     let currentComment = null;
+    let inMultilineString = false;
+    let multilineContent = [];
 
     for (const line of lines) {
       const trimmed = line.trim();
+      
+      // 处理多行字符串开始
+      if (trimmed === '"+"' && !inMultilineString) {
+        inMultilineString = true;
+        multilineContent = [];
+        continue;
+      }
+      
+      // 处理多行字符串结束
+      if (trimmed === '"-"' && inMultilineString) {
+        inMultilineString = false;
+        if (currentTestCase && multilineContent.length > 0) {
+          const multilineStep = multilineContent.join('\n');
+          currentTestCase.steps.push({ 
+            action: multilineStep, 
+            comment: currentComment, 
+            workflow: workflow,
+            isMultiline: true 
+          });
+          currentComment = null;
+        }
+        continue;
+      }
+
+      // 如果在多行字符串中，收集内容
+      if (inMultilineString) {
+        multilineContent.push(line); // 保留原始行（包括缩进）
+        continue;
+      }
+
+      // 跳过空行
       if (!trimmed) continue;
+
+      // 处理测试用例标题
       if (trimmed.startsWith("## ")) {
         if (currentTestCase) testCases.push(currentTestCase);
-        currentTestCase = { name: trimmed.replace("## ", ""), steps: [], comments: [] };
+        currentTestCase = { 
+          name: trimmed.replace("## ", ""), 
+          steps: [], 
+          comments: [] 
+        };
         currentComment = null;
-      } else if (trimmed.startsWith("# ") && currentTestCase) {
+      } 
+      // 处理注释行
+      else if (trimmed.startsWith("# ") && currentTestCase) {
         currentComment = trimmed.replace("# ", "");
         currentTestCase.comments.push(currentComment);
-      } else if (currentTestCase && trimmed) {
+      } 
+      // 处理步骤分隔符
+      else if (trimmed.startsWith("---") && currentTestCase) {
+        testCases.push(currentTestCase);
+        currentTestCase = { 
+          name: `未命名用例_${testCases.length + 1}`, 
+          steps: [], 
+          comments: [] 
+        };
+        currentComment = null;
+      }
+      // 处理普通步骤行
+      else if (currentTestCase && trimmed) {
         const [step, comment] = this.parseStepLine(trimmed);
         if (step) {
-          currentTestCase.steps.push({ action: step, comment: comment || currentComment, workflow: workflow });
+          currentTestCase.steps.push({ 
+            action: step, 
+            comment: comment || currentComment, 
+            workflow: workflow 
+          });
           currentComment = null;
         }
       }
     }
+    
+    // 添加最后一个测试用例
     if (currentTestCase) testCases.push(currentTestCase);
     return testCases;
   }
@@ -221,68 +280,106 @@ class TextTestRunner {
     return [line.trim(), null];
   }
 
-  // determineWorkflow(step, testCaseName) {
-  //   const scenariosDir = join(process.cwd(), "tests", "scenarios");
-  //   const available = [];
-  //   if (existsSync(scenariosDir)) {
-  //     readdirSync(scenariosDir).forEach((file) => {
-  //       if (file.endsWith(".txt")) {
-  //         const name = `${file.replace(".txt", "")}-flow`;
-  //         available.push({ name, keywords: [file.replace(".txt", "").toLowerCase()] });
-  //       }
-  //     });
-  //   }
-  //   available.push({ name: "shared-actions", keywords: ["shared", "common", "通用", "共享"] });
-  //   const stepLower = step.toLowerCase();
-  //   for (const wf of available) {
-  //     for (const kw of wf.keywords) {
-  //       if (stepLower.includes(kw)) return wf.name;
-  //     }
-  //   }
-  //   const caseLower = testCaseName.toLowerCase();
-  //   for (const wf of available) {
-  //     for (const kw of wf.keywords) {
-  //       if (caseLower.includes(kw) && kw !== "shared" && kw !== "common") return wf.name;
-  //     }
-  //   }
-  //   return "shared-actions";
-  // }
-
-  async executeStep(runnerContext,stepInfo) { 
-
-    const r = await this.stepExecutor.executeStep(runnerContext,stepInfo); 
-    r.result = r.result ? shallowStringify(r.result, {
-        maxDepth : 2,
-        exclude :[],
-        include : null,
-        handleFunctions :'skip', // 'skip', 'stringify', 'replace'
-        handleUndefined : 'skip'  // 'skip', 'null'
-    }): undefined;
+  async executeStep(runnerContext, stepInfo) { 
+    const r = await this.stepExecutor.executeStep(runnerContext, stepInfo); 
+    
+    // 处理执行结果
+    if (r.result) {
+      r.result = shallowStringify(r.result, {
+        maxDepth: 2,
+        exclude: [],
+        include: null,
+        handleFunctions: 'skip',
+        handleUndefined: 'skip'
+      });
+    }
+    
+    // 记录多行步骤信息
+    if (stepInfo.isMultiline) {
+      r.isMultiline = true;
+      r.multilineContent = stepInfo.action;
+    }
+    
     return r;
   }
 
   async runTestCase(runnerContext, testCase) {
     this.currentTestCase = testCase.name;
-    const caseResults = { name: testCase.name, steps: [], passed: true, startTime: Date.now() };
+    const caseResults = { 
+      name: testCase.name, 
+      steps: [], 
+      passed: true, 
+      startTime: Date.now(),
+      multilineSteps: 0
+    };
+
     console.log(`\n📋 开始测试: ${testCase.name}`);
+    
+    // 输出用例说明
     if (testCase.comments.length > 0) {
       console.log("   📝 用例说明:");
       testCase.comments.forEach((c) => console.log(`     - ${c}`));
     }
+
+    // 统计多行步骤
+    const multilineSteps = testCase.steps.filter(step => step.isMultiline);
+    if (multilineSteps.length > 0) {
+      caseResults.multilineSteps = multilineSteps.length;
+      console.log(`   📄 包含 ${multilineSteps.length} 个多行步骤`);
+    }
+
+    // 执行每个步骤
     for (const stepInfo of testCase.steps) {
-      const r = await this.executeStep(runnerContext,stepInfo);
-      caseResults.steps.push(r);
-      if (!r.success) { 
+      const stepResult = await this.executeStep(runnerContext, stepInfo);
+      caseResults.steps.push(stepResult);
+      
+      // 输出步骤执行信息（特别标记多行步骤）
+      if (stepInfo.isMultiline) {
+        console.log(`   📄 执行多行步骤: ${stepResult.success ? '✅' : '❌'}`);
+        if (!stepResult.success) {
+          console.log(`     内容: ${stepInfo.action.substring(0, 100)}...`);
+        }
+      } else {
+        console.log(`   ${stepResult.success ? '✅' : '❌'} ${stepInfo.action}`);
+      }
+      
+      // 步骤失败时停止执行
+      if (!stepResult.success) { 
         caseResults.passed = false;
-        caseResults.error = r.error; 
+        caseResults.error = stepResult.error; 
         break; 
       }
     }
+
     caseResults.endTime = Date.now();
     caseResults.duration = caseResults.endTime - caseResults.startTime;
-    console.log(caseResults.passed ? `   ✅ 测试通过 (${caseResults.duration}ms)` : `   ❌ 测试失败 (${caseResults.duration}ms)`);
+    
+    // 输出测试结果
+    const statusIcon = caseResults.passed ? '✅' : '❌';
+    const statusText = caseResults.passed ? '通过' : '失败';
+    console.log(`   ${statusIcon} 测试${statusText} (${caseResults.duration}ms)`);
+    
+    // 如果有失败，显示错误信息
+    if (!caseResults.passed && caseResults.error) {
+      console.log(`   💥 错误: ${caseResults.error}`);
+    }
+
     this.results.push(caseResults);
     return caseResults;
+  }
+
+  // 获取解析统计信息
+  getParseStats() {
+    const totalSteps = this.results.reduce((sum, testCase) => sum + testCase.steps.length, 0);
+    const totalMultilineSteps = this.results.reduce((sum, testCase) => sum + (testCase.multilineSteps || 0), 0);
+    
+    return {
+      totalTestCases: this.results.length,
+      totalSteps: totalSteps,
+      totalMultilineSteps: totalMultilineSteps,
+      passedTestCases: this.results.filter(tc => tc.passed).length,
+      failedTestCases: this.results.filter(tc => !tc.passed).length
+    };
   }
 }
 

@@ -174,7 +174,17 @@ export async function debugFile(scenarioFileArg) {
       wb.broadcast({ type: "log", level: "info", message: "当前无可执行步骤，请添加步骤或发送脚本/自然语言。" });
       continue;
     }
-    if (typeof action === "object") {
+    else if (action === "e" && lastStep) {
+      const result = await runner.executeStep(runnerContext,lastStep);
+      if (!result.success) {
+        wb.broadcast({ type: "error", message: result.error });
+      } else {
+        wb.broadcast({ type: "result", step: lastStep.action, result: result.result ?? true });
+      }
+      continue;
+    }
+    else if (typeof action === "object") {
+       
       if (action && typeof action.text === "string" && action.text.trim()) {
         const text = action.text.trim();
         // wb.broadcast({ type: "script", script: text });
@@ -195,15 +205,8 @@ export async function debugFile(scenarioFileArg) {
         }
         continue;
       }
-    }
-    if (action === "e" && lastStep) {
-      const result = await runner.executeStep(runnerContext,lastStep);
-      if (!result.success) {
-        wb.broadcast({ type: "error", message: result.error });
-      } else {
-        wb.broadcast({ type: "result", step: lastStep.action, result: result.result ?? true });
-      }
-      continue;
+      
+
     }
     // 其它动作（如 s/c）在最后一步时无特殊含义，保持等待
   }
@@ -436,7 +439,7 @@ function startWorkbenchServer(state, runner) {
           } catch {}
           const caseHeader = `## ${tc.name || "测试用例"}`;
           const commentLines = (tc.comments || []).filter((c) => c && String(c).trim()).map((c) => `# ${String(c).trim()}`);
-          const stepLines = tc.steps.map((s) => s.action);
+          const stepLines = tc.steps.map((s) => {const lines = s.action.split("\n"); if(lines.length > 1){ return '\n"+"\n' + s.action + '\n"-"\n'} else {return s.action;} } );
           const lines = [
             ...leading,
             leading.length > 0 ? "" : undefined,
@@ -594,7 +597,7 @@ function versionFilePath(mainFile, v) {
 function listVersions(mainFile) {
   const dir = dirname(mainFile);
   const base = basename(mainFile).replace(/\.txt$/, "");
-  const prefix = `${mainFile}-v`;
+  const prefix = `${base}.txt-v`;
   const versions = [];
   try {
     for (const f of readdirSync(dir)) {
