@@ -65,12 +65,18 @@ try {
     }
 
     case "test:watch": {
+
+      const corePath = join(process.cwd(), "config", "core.yaml");
+      const coreConfig = yaml.load(readFileSync(corePath, "utf-8"));
+
+
+
       console.log(`监听目录: ${join("tests", "scenarios")}`);
       console.log('按 q 或 Ctrl-C 退出\n');
 
       const buildTestSuite = (file) => {
         const base = file.split("/").pop().replace(/\.txt$/, "");
-        const testContent = generateTestSuite(file);
+        const testContent = generateTestSuite(file,coreConfig);
         const testFile = join(process.cwd(), "tests", "vitest", base + ".test.js");
         fs.writeFileSync(testFile, testContent); 
         console.log(`生成测试文件 ${testFile}`);
@@ -131,7 +137,11 @@ try {
       if (!file) { usage(); process.exit(1); }
       const base = file.replace(/\.txt$/, "").toLowerCase();
       const scenarioFile = join(process.cwd(), "tests", "scenarios", base + ".txt");
-      const testContent = generateTestSuite(scenarioFile);
+
+      const corePath = join(process.cwd(), "config", "core.yaml");
+      const coreConfig = yaml.load(readFileSync(corePath, "utf-8"));
+
+      const testContent = generateTestSuite(scenarioFile,coreConfig);
       const testFile = join(process.cwd(), "tests", "vitest", base + ".test.js");
       fs.writeFileSync(testFile, testContent); 
       console.log(`生成测试文件 ${testFile}`);

@@ -6,7 +6,6 @@ import { fileURLToPath } from "url";
 import { StepExecutor } from "./executor/step-executor.js";
 import StagehandManager from "../../setup/stagehand-setup.js";
 import "../../setup/env-setup.js"; // 加载 .env 与测试凭据，提供 %TEST_*% 变量
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -106,7 +105,7 @@ function createTestSuite(textFilePath) {
         afterAll(async () => { await runner.stagehandManager.closeAll(); });
         this.testCases.forEach((tc, i) => {
           test(`TC${i + 1}: ${tc.name}`, async () => {
-            const result = await runner.runTestCase(tc);
+            const result = await runner.runTestCase(runnerContext,tc);
             if (!result.passed) {
               const failed = result.steps.find((s) => !s.success);
               throw new Error(`测试失败: ${failed?.error || "未知错误"}\n失败步骤: ${failed?.action}`);
@@ -118,31 +117,62 @@ function createTestSuite(textFilePath) {
   };
 }
 
-function generateTestSuite(textFilePath) {
+function generateTestSuite(textFilePath,templateConfig) {
   const runner = new TextTestRunner();
   const workflow = determineWorkflow(textFilePath);
   const testCases = runner.parseTextScenario(textFilePath,workflow);
   const suiteName = `文本测试: ${textFilePath.split("/").pop().replace(".txt", "").replace(/^(.)/, (m) => m.toUpperCase())}`;
   const testContent = [];
-  testContent.push(`import { describe, test, beforeAll, afterAll, afterEach } from "vitest";`);
-  testContent.push(`import { TextTestRunner} from "../../bin/itest/core/test-runner.js";`);
-  testContent.push(`const runner = new TextTestRunner();`);
-  testContent.push(`describe("${suiteName}", () => {`);
-  testContent.push(`  beforeAll(async () => { console.log("\\n🚀 初始化测试套件: ${suiteName}"); });`);
-  testContent.push(`  afterEach(async () => {});`);
-  testContent.push(`  afterAll(async () => { await runner.stagehandManager.closeAll(); });`);
-  testCases.forEach((tc, i) => {
-      testContent.push(`  test("TC${i + 1}: ${tc.name}", async () => {`);
-      testContent.push(`    const result = await runner.runTestCase(${JSON.stringify(tc)});`);
-      testContent.push(`    if (!result.passed) {`);
-      testContent.push(`      const failed = result.steps.find((s) => !s.success);`);
-      testContent.push(`      throw new Error(\`测试失败: \${failed?.error || "未知错误"}\\n失败步骤: \${failed?.action}\`);`);
-      testContent.push(`    }`);
-      testContent.push(`  }, 120000);`);
+
+
+  const test_template_each = [];
+  testCases.forEach((testCase, index) => {
+      const templateEachVal = {testcase: testCase, index: index + 1, "testcase:name": testCase.name, "testcase:jsonstring": JSON.stringify(testCase)};
+      test_template_each.push(templateConfig.translation.test_template_each.replace(/\$\{[\w:]+\}/g, (match) => {
+        const key = match.replace(/^\$\{|\}$/g, "");
+        return templateEachVal[key] || match;
+      }));
+
+      // testContent.push(`  test("TC${index + 1}: ${testCase.name}", async () => {`);
+      // testContent.push(`    const result = await runner.runTestCase(this,${JSON.stringify(testCase)});`);
+      // testContent.push(`    if (!result.passed) {`);
+      // testContent.push(`      const failed = result.steps.find((s) => !s.success);`);
+      // testContent.push(`      throw new Error(\`测试失败: \${failed?.error || "未知错误"}\\n失败步骤: \${failed?.action}\`);`);
+      // testContent.push(`    }`);
+      // testContent.push(`  }, 120000);`);
 
 
    });
-   testContent.push(`});`);
+
+  const templateVal = {"suite:name": suiteName, test_template_each: test_template_each.join("\n")}
+
+  testContent.push(templateConfig.translation.test_template.replace(/\$\{[\w:]+\}/g, (match) => {
+    const key = match.replace(/^\$\{|\}$/g, "");
+    return templateVal[key] || match;
+  }));
+
+  // testContent.push(`import { describe, test, beforeAll, afterAll, afterEach, expect } from "vitest";`);
+  // testContent.push(`import { TextTestRunner} from "../../bin/itest/core/test-runner.js";`);
+  // testContent.push(`import fs from "fs";`);
+  // testContent.push(`import path from "path";`);
+  // testContent.push(`import { z } from "zod";`);
+  // testContent.push(`const runner = new TextTestRunner();`);
+  // testContent.push(`describe("${suiteName}", () => {`);
+  // testContent.push(`  beforeAll(async () => { console.log("\\n🚀 初始化测试套件: ${suiteName}"); });`);
+  // testContent.push(`  afterEach(async () => {});`);
+  // testContent.push(`  afterAll(async () => { await runner.stagehandManager.closeAll(); });`);
+  // testCases.forEach((testCase, index) => {
+  //     testContent.push(`  test("TC${index + 1}: ${testCase.name}", async () => {`);
+  //     testContent.push(`    const result = await runner.runTestCase(this,${JSON.stringify(testCase)});`);
+  //     testContent.push(`    if (!result.passed) {`);
+  //     testContent.push(`      const failed = result.steps.find((s) => !s.success);`);
+  //     testContent.push(`      throw new Error(\`测试失败: \${failed?.error || "未知错误"}\\n失败步骤: \${failed?.action}\`);`);
+  //     testContent.push(`    }`);
+  //     testContent.push(`  }, 120000);`);
+
+
+  //  });
+  //  testContent.push(`});`);
    return testContent.join("\n");
 }
 
@@ -218,9 +248,9 @@ class TextTestRunner {
   //   return "shared-actions";
   // }
 
-  async executeStep(stepInfo) { 
+  async executeStep(runnerContext,stepInfo) { 
 
-    const r = await this.stepExecutor.executeStep(stepInfo); 
+    const r = await this.stepExecutor.executeStep(runnerContext,stepInfo); 
     r.result = r.result ? shallowStringify(r.result, {
         maxDepth : 2,
         exclude :[],
@@ -231,7 +261,7 @@ class TextTestRunner {
     return r;
   }
 
-  async runTestCase(testCase) {
+  async runTestCase(runnerContext, testCase) {
     this.currentTestCase = testCase.name;
     const caseResults = { name: testCase.name, steps: [], passed: true, startTime: Date.now() };
     console.log(`\n📋 开始测试: ${testCase.name}`);
@@ -240,7 +270,7 @@ class TextTestRunner {
       testCase.comments.forEach((c) => console.log(`     - ${c}`));
     }
     for (const stepInfo of testCase.steps) {
-      const r = await this.executeStep(stepInfo);
+      const r = await this.executeStep(runnerContext,stepInfo);
       caseResults.steps.push(r);
       if (!r.success) { 
         caseResults.passed = false;

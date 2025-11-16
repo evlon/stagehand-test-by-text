@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, copyFi
 import StagehandManager from "../../setup/stagehand-setup.js";
 import "../../setup/env-setup.js";
 import { TextTestRunner,determineWorkflow, shallowStringify } from "../core/test-runner.js";
+import runnerContext from "../../../tests/debug/runner-context.js"
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -122,7 +123,7 @@ export async function debugFile(scenarioFileArg) {
           const text = action.text.trim();
           wb.broadcast({ type: "script", script: text });
           const newStep = { action: text, comment: null, workflow: currentWorkflow};
-          const r = await runner.executeStep(newStep);
+          const r = await runner.executeStep(runnerContext,newStep);
           if (!r.success) {
             wb.broadcast({ type: "error", message: r.error });
           } else {
@@ -142,7 +143,7 @@ export async function debugFile(scenarioFileArg) {
         // 未识别，退回 e
         action = "e";
       }
-      const result = await runner.executeStep(stepInfo);
+      const result = await runner.executeStep(runnerContext,stepInfo);
       if (!result.success) {
         console.log("❌ 失败:", result.error);
         wb.broadcast({ type: "error", message: result.error });
@@ -179,7 +180,7 @@ export async function debugFile(scenarioFileArg) {
         // wb.broadcast({ type: "script", script: text });
         const newStep = { action: text, comment: null, workflow: currentWorkflow };
         wb.broadcast({ type: "script", script: newStep.action });
-        const r = await runner.executeStep(newStep);
+        const r = await runner.executeStep(runnerContext,newStep);
         if (!r.success) {
           wb.broadcast({ type: "error", message: r.error });
         } else {
@@ -196,7 +197,7 @@ export async function debugFile(scenarioFileArg) {
       }
     }
     if (action === "e" && lastStep) {
-      const result = await runner.executeStep(lastStep);
+      const result = await runner.executeStep(runnerContext,lastStep);
       if (!result.success) {
         wb.broadcast({ type: "error", message: result.error });
       } else {

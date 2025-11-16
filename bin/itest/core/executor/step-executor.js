@@ -55,25 +55,26 @@ export class StepExecutor {
     }
 
     // 生成一个可执行的函数，签名为 (stagehand, z, expect, page)
-    const compiled = async (stagehand, zParam, expectParam, page, path, fs, params) => {
+    const compiled = async (runnerContext,stagehand, params) => {
       const paramsKeys = Object.keys(params);
       let paramsStr = "";
       if(paramsKeys.length>0){
-        paramsStr = `const {${paramsKeys.join(",")}} = params`
+        paramsStr = `const {${paramsKeys.join(",")}} = $params`
+      }
+
+      const runnerContextKeys = Object.keys(runnerContext);
+      let runnerContextStr = "";
+      if(runnerContextKeys.length>0){
+        runnerContextStr = `const {${runnerContextKeys.join(",")}} = $runnerContext`
       }
 
       const runner = new Function(
-        "stagehand",
-        "context",
-        "z",
-        "expect",
-        "page",
-        "path",
-        "fs",
-        "params",
-        `return (async () => {${paramsStr};   const $$title = await page.title(); const $$result = ${translation.code}; return {title:$$title,url:page.url(), result:$$result}; })();`
+        "$runnerContext",
+        "$stagehand",
+        "$params",
+        `return (async () => {const $context = $stagehand.context; const $page = $context.activePage(); ${runnerContextStr}; ${paramsStr};   const $title = await $page.title(); const $url = $page.url(); const $result = ${translation.code}; return {title:$title,url:$url, result:$result}; })();`
       );
-      return await runner(stagehand,stagehand.context, zParam, expectParam, page, path, fs, params);
+      return await runner(runnerContext, stagehand, params);
     };
 
     // 附带元信息，供预览/执行阶段使用
@@ -82,7 +83,7 @@ export class StepExecutor {
   }
 
   // 执行已编译的步骤函数，并记录历史与日志
-  async executeCompiledStep(compiled) {
+  async executeCompiledStep(runnerContext, compiled) {
     const { action, workflow, comment, expandedAction, translation } = compiled.__meta || {};
     // const stepParams = translation.params;
     const stagehand = await this.getStagehandForWorkflow(workflow);
@@ -117,18 +118,18 @@ export class StepExecutor {
       }
 
       // 轻量 expect shim，避免在非 Vitest 环境直接导入 Vitest
-      const expectShim = (actual) => ({
-        toBe(expected) {
-          if (actual !== expected) throw new Error(`expected ${actual} to be ${expected}`);
-        },
-        toEqual(expected) {
-          const a = JSON.stringify(actual);
-          const b = JSON.stringify(expected);
-          if (a !== b) throw new Error(`expected ${a} to equal ${b}`);
-        },
-      });
+      // const expectShim = (actual) => ({
+      //   toBe(expected) {
+      //     if (actual !== expected) throw new Error(`expected ${actual} to be ${expected}`);
+      //   },
+      //   toEqual(expected) {
+      //     const a = JSON.stringify(actual);
+      //     const b = JSON.stringify(expected);
+      //     if (a !== b) throw new Error(`expected ${a} to equal ${b}`);
+      //   },
+      // });
 
-      const result = await compiled(stagehand, z, expectShim, page,path,fs,translation.params);
+      const result = await compiled(runnerContext, stagehand, translation.params);
       const duration = Date.now() - start;
       this.executionHistory.push({ action, type: translation.type, success: true, duration, workflow, timestamp: new Date().toISOString() });
       console.log(`   ✅ 步骤执行成功 (${duration}ms)`);
@@ -153,9 +154,9 @@ export class StepExecutor {
     }
   }
 
-  async executeStep(stepInfo) {
+  async executeStep(runnerContext,stepInfo) {
     const compiled = this.compileStep(stepInfo);
-    return await this.executeCompiledStep(compiled);
+    return await this.executeCompiledStep(runnerContext,compiled);
   }
 
 

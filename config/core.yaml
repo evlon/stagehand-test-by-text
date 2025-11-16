@@ -19,6 +19,27 @@ translation:
   validation: true
   # 参数正则：用于在 translation-rules.yaml 的 {param} 占位符上应用更精确的匹配
   # 注意：这些正则会嵌入整体规则的 ^...$ 中，建议无需 ^/$ 锚点；若包含，会自动剥离
+
+  test_template: |
+    import { TextTestRunner} from "../../bin/itest/core/test-runner.js";
+    import runnerContext from "../debug/runner-context.js";
+    const runner = new TextTestRunner();
+    describe("${suite:name}", () => {
+      beforeAll(async () => { console.log("\n🚀 初始化测试套件: ${suite:name}"); });
+      afterEach(async () => {});
+      afterAll(async () => { await runner.stagehandManager.closeAll(); });
+      ${test_template_each}
+    });
+  test_template_each: |
+      test("TC${index}: ${testcase:name}", async () => {
+          const result = await runner.runTestCase(runnerContext,${testcase:jsonstring});
+          if (!result.passed) {
+            const failed = result.steps.find((s) => !s.success);
+            throw new Error(`测试失败: ${failed?.error || "未知错误"}\n失败步骤: ${failed?.action}`);
+          }
+        }, 120000);
+
+
   paramPatterns:
     url: "https?:\\/\\/[^\\s'\")<>]+"
     email: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
