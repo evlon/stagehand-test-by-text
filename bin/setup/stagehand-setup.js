@@ -20,44 +20,44 @@ const __dirname = dirname(__filename);
 class StagehandManager {
   constructor() {
     this.instances = new Map();
-    this.cacheBaseDir = join(process.cwd(), "cache");
+    this.cacheBaseDir = join(process.cwd(), process.env.STAGEHAND_CACHE_DIR || "cache");
     this.ensureCacheDirs();
   }
 
   ensureCacheDirs() {
-    const scenariosDir = join(process.cwd(), "tests", "scenarios");
+    // const scenariosDir = join(process.cwd(), "tests", "scenarios");
 
-    // 自动从 scenarios 目录获取文件名并生成缓存目录名
-    const cacheDirs = [];
+    // // 自动从 scenarios 目录获取文件名并生成缓存目录名
+    // const cacheDirs = [];
 
-    if (existsSync(scenariosDir)) {
-      const files = readdirSync(scenariosDir);
-      files.forEach((file) => {
-        if (file.endsWith(".txt")) {
-          // 将文件名转换为缓存目录名，例如：dashboard.txt -> dashboard-flow
-          const baseName = file.replace(".txt", "");
-          cacheDirs.push(`${baseName}-flow`);
-        }
-      });
-    }
+    // if (existsSync(scenariosDir)) {
+    //   const files = readdirSync(scenariosDir);
+    //   files.forEach((file) => {
+    //     if (file.endsWith(".txt")) {
+    //       // 将文件名转换为缓存目录名，例如：dashboard.txt -> dashboard-flow
+    //       const baseName = file.replace(".txt", "");
+    //       cacheDirs.push(`${baseName}-flow`);
+    //     }
+    //   });
+    // }
 
-    // 确保至少包含 shared-actions 目录
-    if (!cacheDirs.includes("shared-actions")) {
-      cacheDirs.push("shared-actions");
-    }
+    // // 确保至少包含 shared-actions 目录
+    // if (!cacheDirs.includes("shared-actions")) {
+    //   cacheDirs.push("shared-actions");
+    // }
 
-    console.log(`📁 自动生成的缓存目录: ${cacheDirs.join(", ")}`);
+    // console.log(`📁 自动生成的缓存目录: ${cacheDirs.join(", ")}`);
 
     if (!existsSync(this.cacheBaseDir)) {
       mkdirSync(this.cacheBaseDir, { recursive: true });
     }
 
-    cacheDirs.forEach((dir) => {
-      const dirPath = join(this.cacheBaseDir, dir);
-      if (!existsSync(dirPath)) {
-        mkdirSync(dirPath, { recursive: true });
-      }
-    });
+    // cacheDirs.forEach((dir) => {
+    //   const dirPath = join(this.cacheBaseDir, dir);
+    //   if (!existsSync(dirPath)) {
+    //     mkdirSync(dirPath, { recursive: true });
+    //   }
+    // });
   }
 
   async getStagehandForWorkflow(workflowName, options = {}) {

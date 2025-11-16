@@ -1,7 +1,7 @@
 "use strict";
 
-import { readFileSync, existsSync, readdirSync } from "fs";
-import { join, dirname } from "path";
+import { readFileSync, existsSync, readdirSync ,mkdirSync} from "fs";
+import path, { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { StepExecutor } from "./executor/step-executor.js";
 import StagehandManager from "../../setup/stagehand-setup.js";
@@ -76,7 +76,77 @@ function shallowStringify(obj, options = {}) {
     return JSON.stringify(result, null, options.space);
 }
 
-export class TextTestRunner {
+function determineWorkflow(textFilePath){
+  const scenariosDir = resolve(process.env.TEST_CACHE_DIR || "cache");
+  let lowFilename = path.basename(textFilePath).replace(/\.txt$/i, "").toLowerCase().toLowerCase();
+
+  let workflow = lowFilename + "-flow";
+  let workflowDir = path.join(scenariosDir, workflow);
+  if (!existsSync(workflowDir)) {
+    mkdirSync(workflowDir, { recursive: true });
+  }
+
+  return workflow;  
+}
+
+function createTestSuite(textFilePath) {
+  const runner = new TextTestRunner();
+  const workflow = determineWorkflow(textFilePath);
+  const testCases = runner.parseTextScenario(textFilePath,workflow);
+  const suiteName = `文本测试: ${textFilePath.split("/").pop().replace(/\.txt$/i, "").replace(/^(.)/, (m) => m.toUpperCase())}`;
+  return {
+    runner,
+    testCases,
+    suiteName,
+    async generateTests() {
+      const { describe, test, beforeAll, afterAll, afterEach } = await import("vitest");
+      describe(this.suiteName, () => {
+        beforeAll(async () => { console.log(`\n🚀 初始化测试套件: ${this.suiteName}`); });
+        afterEach(async () => {});
+        afterAll(async () => { await runner.stagehandManager.closeAll(); });
+        this.testCases.forEach((tc, i) => {
+          test(`TC${i + 1}: ${tc.name}`, async () => {
+            const result = await runner.runTestCase(tc);
+            if (!result.passed) {
+              const failed = result.steps.find((s) => !s.success);
+              throw new Error(`测试失败: ${failed?.error || "未知错误"}\n失败步骤: ${failed?.action}`);
+            }
+          }, 120000);
+        });
+      });
+    },
+  };
+}
+
+function generateTestSuite(textFilePath) {
+  const runner = new TextTestRunner();
+  const workflow = determineWorkflow(textFilePath);
+  const testCases = runner.parseTextScenario(textFilePath,workflow);
+  const suiteName = `文本测试: ${textFilePath.split("/").pop().replace(".txt", "").replace(/^(.)/, (m) => m.toUpperCase())}`;
+  const testContent = [];
+  testContent.push(`import { describe, test, beforeAll, afterAll, afterEach } from "vitest";`);
+  testContent.push(`import { TextTestRunner} from "../../bin/itest/core/test-runner.js";`);
+  testContent.push(`const runner = new TextTestRunner();`);
+  testContent.push(`describe("${suiteName}", () => {`);
+  testContent.push(`  beforeAll(async () => { console.log("\\n🚀 初始化测试套件: ${suiteName}"); });`);
+  testContent.push(`  afterEach(async () => {});`);
+  testContent.push(`  afterAll(async () => { await runner.stagehandManager.closeAll(); });`);
+  testCases.forEach((tc, i) => {
+      testContent.push(`  test("TC${i + 1}: ${tc.name}", async () => {`);
+      testContent.push(`    const result = await runner.runTestCase(${JSON.stringify(tc)});`);
+      testContent.push(`    if (!result.passed) {`);
+      testContent.push(`      const failed = result.steps.find((s) => !s.success);`);
+      testContent.push(`      throw new Error(\`测试失败: \${failed?.error || "未知错误"}\\n失败步骤: \${failed?.action}\`);`);
+      testContent.push(`    }`);
+      testContent.push(`  }, 120000);`);
+
+
+   });
+   testContent.push(`});`);
+   return testContent.join("\n");
+}
+
+class TextTestRunner {
   constructor() {
     this.stagehandManager = new StagehandManager();
     this.stepExecutor = new StepExecutor();
@@ -84,7 +154,7 @@ export class TextTestRunner {
     this.currentTestCase = null;
   }
 
-  parseTextScenario(filePath) {
+  parseTextScenario(filePath,workflow) {
     const content = readFileSync(filePath, "utf-8");
     const lines = content.split("\n");
     const testCases = [];
@@ -105,7 +175,7 @@ export class TextTestRunner {
       } else if (currentTestCase && trimmed) {
         const [step, comment] = this.parseStepLine(trimmed);
         if (step) {
-          currentTestCase.steps.push({ action: step, comment: comment || currentComment, workflow: this.determineWorkflow(step, currentTestCase.name) });
+          currentTestCase.steps.push({ action: step, comment: comment || currentComment, workflow: workflow });
           currentComment = null;
         }
       }
@@ -121,32 +191,32 @@ export class TextTestRunner {
     return [line.trim(), null];
   }
 
-  determineWorkflow(step, testCaseName) {
-    const scenariosDir = join(process.cwd(), "tests", "scenarios");
-    const available = [];
-    if (existsSync(scenariosDir)) {
-      readdirSync(scenariosDir).forEach((file) => {
-        if (file.endsWith(".txt")) {
-          const name = `${file.replace(".txt", "")}-flow`;
-          available.push({ name, keywords: [file.replace(".txt", "").toLowerCase()] });
-        }
-      });
-    }
-    available.push({ name: "shared-actions", keywords: ["shared", "common", "通用", "共享"] });
-    const stepLower = step.toLowerCase();
-    for (const wf of available) {
-      for (const kw of wf.keywords) {
-        if (stepLower.includes(kw)) return wf.name;
-      }
-    }
-    const caseLower = testCaseName.toLowerCase();
-    for (const wf of available) {
-      for (const kw of wf.keywords) {
-        if (caseLower.includes(kw) && kw !== "shared" && kw !== "common") return wf.name;
-      }
-    }
-    return "shared-actions";
-  }
+  // determineWorkflow(step, testCaseName) {
+  //   const scenariosDir = join(process.cwd(), "tests", "scenarios");
+  //   const available = [];
+  //   if (existsSync(scenariosDir)) {
+  //     readdirSync(scenariosDir).forEach((file) => {
+  //       if (file.endsWith(".txt")) {
+  //         const name = `${file.replace(".txt", "")}-flow`;
+  //         available.push({ name, keywords: [file.replace(".txt", "").toLowerCase()] });
+  //       }
+  //     });
+  //   }
+  //   available.push({ name: "shared-actions", keywords: ["shared", "common", "通用", "共享"] });
+  //   const stepLower = step.toLowerCase();
+  //   for (const wf of available) {
+  //     for (const kw of wf.keywords) {
+  //       if (stepLower.includes(kw)) return wf.name;
+  //     }
+  //   }
+  //   const caseLower = testCaseName.toLowerCase();
+  //   for (const wf of available) {
+  //     for (const kw of wf.keywords) {
+  //       if (caseLower.includes(kw) && kw !== "shared" && kw !== "common") return wf.name;
+  //     }
+  //   }
+  //   return "shared-actions";
+  // }
 
   async executeStep(stepInfo) { 
 
@@ -172,7 +242,11 @@ export class TextTestRunner {
     for (const stepInfo of testCase.steps) {
       const r = await this.executeStep(stepInfo);
       caseResults.steps.push(r);
-      if (!r.success) { caseResults.passed = false; caseResults.error = r.error; break; }
+      if (!r.success) { 
+        caseResults.passed = false;
+        caseResults.error = r.error; 
+        break; 
+      }
     }
     caseResults.endTime = Date.now();
     caseResults.duration = caseResults.endTime - caseResults.startTime;
@@ -182,30 +256,4 @@ export class TextTestRunner {
   }
 }
 
-export function createTestSuite(textFilePath) {
-  const runner = new TextTestRunner();
-  const testCases = runner.parseTextScenario(textFilePath);
-  const suiteName = `文本测试: ${textFilePath.split("/").pop().replace(".txt", "").replace(/^(.)/, (m) => m.toUpperCase())}`;
-  return {
-    runner,
-    testCases,
-    suiteName,
-    async generateTests() {
-      const { describe, test, beforeAll, afterAll, afterEach } = await import("vitest");
-      describe(this.suiteName, () => {
-        beforeAll(async () => { console.log(`\n🚀 初始化测试套件: ${this.suiteName}`); });
-        afterEach(async () => {});
-        afterAll(async () => { await runner.stagehandManager.closeAll(); });
-        this.testCases.forEach((tc, i) => {
-          test(`TC${i + 1}: ${tc.name}`, async () => {
-            const result = await runner.runTestCase(tc);
-            if (!result.passed) {
-              const failed = result.steps.find((s) => !s.success);
-              throw new Error(`测试失败: ${failed?.error || "未知错误"}\n失败步骤: ${failed?.action}`);
-            }
-          }, 120000);
-        });
-      });
-    },
-  };
-}
+export { createTestSuite ,generateTestSuite,TextTestRunner ,shallowStringify ,determineWorkflow};

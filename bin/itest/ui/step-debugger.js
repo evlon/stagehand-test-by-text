@@ -9,20 +9,21 @@ import { parse as parseUrl } from "url";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, copyFileSync } from "fs";
 import StagehandManager from "../../setup/stagehand-setup.js";
 import "../../setup/env-setup.js";
-import { TextTestRunner } from "../core/test-runner.js";
+import { TextTestRunner,determineWorkflow, shallowStringify } from "../core/test-runner.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
-// function prompt(question) {
-//   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-//   return new Promise((resolve) => rl.question(question, (ans) => { rl.close(); resolve(ans); }));
-// }
+function prompt(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => rl.question(question, (ans) => { rl.close(); resolve(ans); }));
+}
 
 
 
 export async function debugFile(scenarioFileArg) {
   // 解析与创建文件: 支持传入文件名（相对）或绝对路径
-  const scenarioFile = scenarioFileArg.match(/\//) ? scenarioFileArg : join(process.cwd(), "tests", "scenarios", scenarioFileArg);
+  let scenarioFile = scenarioFileArg.match(/\//) ? scenarioFileArg : join(process.cwd(), "tests", "scenarios", scenarioFileArg);
+  scenarioFile = scenarioFile.replace(/\.txt$/, "") + ".txt";
   const dir = dirname(scenarioFile);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   if (!existsSync(scenarioFile)) {
@@ -42,7 +43,8 @@ export async function debugFile(scenarioFileArg) {
   }
 
   const runner = new TextTestRunner();
-  let testCases = runner.parseTextScenario(scenarioFile);
+  let currentWorkflow = determineWorkflow(scenarioFile);
+  let testCases = runner.parseTextScenario(scenarioFile,currentWorkflow);
   if (testCases.length === 0) {
     console.log("当前测试文件没有用例，将初始化一个空用例。");
     const name = basename(scenarioFile).replace(/\.txt$/, "");
@@ -119,7 +121,7 @@ export async function debugFile(scenarioFileArg) {
         if (action && typeof action.text === "string" && action.text.trim()) {
           const text = action.text.trim();
           wb.broadcast({ type: "script", script: text });
-          const newStep = { action: text, comment: null, workflow: runner.determineWorkflow(text, tc.name) };
+          const newStep = { action: text, comment: null, workflow: currentWorkflow};
           const r = await runner.executeStep(newStep);
           if (!r.success) {
             wb.broadcast({ type: "error", message: r.error });
@@ -175,7 +177,7 @@ export async function debugFile(scenarioFileArg) {
       if (action && typeof action.text === "string" && action.text.trim()) {
         const text = action.text.trim();
         // wb.broadcast({ type: "script", script: text });
-        const newStep = { action: text, comment: null, workflow: runner.determineWorkflow(text, tc.name) };
+        const newStep = { action: text, comment: null, workflow: currentWorkflow };
         wb.broadcast({ type: "script", script: newStep.action });
         const r = await runner.executeStep(newStep);
         if (!r.success) {
@@ -234,6 +236,7 @@ if (process.argv[1] && process.argv[1].endsWith("step-debugger.js")) {
 // 简易工作台服务（HTTP + SSE）
 function startWorkbenchServer(state, runner) {
 
+  const currentWorkflow = determineWorkflow(state.file)
   return new Promise((resolve) => {
     let clients = [];
     let pendingActionResolver = null;
@@ -355,11 +358,12 @@ function startWorkbenchServer(state, runner) {
       }
       if (req.method === "POST" && pathname === "/steps/add") {
         jsonBody(req, res, (payload) => {
+
           const tc = state.testCases[state.currentCaseIndex] || { steps: [] };
           const text = (payload?.text || "").trim();
           if (!text) return sendJson(res, 400, { ok: false, error: "text 不能为空" });
           const idx = Number.isInteger(payload?.index) ? payload.index : tc.steps.length;
-          tc.steps.splice(idx, 0, { action: text, comment: payload?.comment || null, workflow: runner.determineWorkflow(text, tc.name) });
+          tc.steps.splice(idx, 0, { action: text, comment: payload?.comment || null, workflow: currentWorkflow});
           state.dirty = true;
           emit({ type: "log", level: "info", message: `添加步骤: ${text}` });
           emit({ type: "steps", steps: tc.steps.map((s) => s.action) });
@@ -376,7 +380,7 @@ function startWorkbenchServer(state, runner) {
           if (!Number.isInteger(idx) || idx < 0 || idx >= tc.steps.length) return sendJson(res, 400, { ok: false, error: "index 无效" });
           if (!text) return sendJson(res, 400, { ok: false, error: "text 不能为空" });
           tc.steps[idx].action = text;
-          tc.steps[idx].workflow = runner.determineWorkflow(text, tc.name);
+          tc.steps[idx].workflow = currentWorkflow;
           state.dirty = true;
           emit({ type: "log", level: "info", message: `更新步骤[${idx}]: ${text}` });
           emit({ type: "steps", steps: tc.steps.map((s) => s.action) });
@@ -583,17 +587,17 @@ function nextVersionNumber(mainFile) {
 function versionFilePath(mainFile, v) {
   const dir = dirname(mainFile);
   const base = basename(mainFile).replace(/\.txt$/, "");
-  return join(dir, `${base}-v${v}.txt`);
+  return join(dir, `${base}.txt-v${v}`);
 }
 
 function listVersions(mainFile) {
   const dir = dirname(mainFile);
   const base = basename(mainFile).replace(/\.txt$/, "");
-  const prefix = `${base}-v`;
+  const prefix = `${mainFile}-v`;
   const versions = [];
   try {
     for (const f of readdirSync(dir)) {
-      const m = f.match(new RegExp(`^${prefix}(\\d+)\\.txt$`));
+      const m = f.match(new RegExp(`^${prefix}(\\d+)$`));
       if (m) versions.push(parseInt(m[1], 10));
     }
   } catch {}

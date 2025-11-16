@@ -2,11 +2,15 @@
 "use strict";
 
 import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, read, readFileSync } from "fs";
+import { join ,resolve} from "path";
+import chokidar from "chokidar";
+import fs from "fs";
 import yaml from "js-yaml";
+import readline from "readline";
 import { IncrementalExecutor } from "../core/executor/incremental-executor.js";
-
+import { TextTestRunner,determineWorkflow, shallowStringify } from "../core/test-runner.js";
+import { generateTestSuite } from '../../itest/core/test-runner.js';
 const args = process.argv.slice(2);
 const cmd = args[0];
 
@@ -43,7 +47,13 @@ try {
       if (!file) { usage(); process.exit(1); }
       const base = file.replace(/\.txt$/, "").toLowerCase();
       const path = `tests/vitest/${base}.test.js`;
-      run(`pnpm vitest run ${path}`);
+      if(existsSync(path)){
+        run(`pnpm vitest run ${path}`);
+      }
+      else{
+        console.log(`未找到文件 ${path}`);
+      }
+      
       break;
     }
 
@@ -54,27 +64,79 @@ try {
       break;
     }
 
-    case "test:changed": {
-      const inc = new IncrementalExecutor();
-      const changes = inc.getChangedTests();
-      if (changes.length === 0) {
-        console.log("✨ 无变化的测试文件");
-        break;
+    case "test:watch": {
+      console.log(`监听目录: ${join("tests", "scenarios")}`);
+      console.log('按 q 或 Ctrl-C 退出\n');
+
+      const buildTestSuite = (file) => {
+        const base = file.split("/").pop().replace(/\.txt$/, "");
+        const testContent = generateTestSuite(file);
+        const testFile = join(process.cwd(), "tests", "vitest", base + ".test.js");
+        fs.writeFileSync(testFile, testContent); 
+        console.log(`生成测试文件 ${testFile}`);
       }
-      for (const ch of changes) {
-        const base = ch.file.split("/").pop().replace(/\.txt$/, "");
-        const path = `tests/vitest/${base}.test.js`;
-        try {
-          run(`pnpm vitest run ${path}`);
-        } catch {}
-      }
-      inc.markRun(changes.map((c) => c.file));
+
+
+      chokidar
+        .watch( "./tests/scenarios/", {
+          // ignored: /(?<!\.txt)$/,
+          persistent: true,
+          ignoreInitial: false,       // 启动时不触发 add 事件
+          awaitWriteFinish: {        // 写完再触发，避免临时文件抖动
+            stabilityThreshold: 300,
+            pollInterval: 100
+          }
+        })
+        .on('add',    p => {
+          if(p.match(/(?<!\.txt)$/i))
+            return;
+          console.log(`[+] ${p}`)
+          if(fs.existsSync(join(process.cwd(), "tests", "vitest", p.split("/").pop().replace(/\.txt$/, "") + ".test.js")))
+            return;
+
+          buildTestSuite(p);
+      })
+        .on('change',  p => {
+          if(p.match(/(?<!\.txt)$/i))
+            return;
+          console.log(`[*] ${p}`)
+          buildTestSuite(p);
+      })
+        .on('unlink',  p => {
+          if(p.match(/(?<!\.txt)$/i))
+            return;
+          console.log(`[-] ${p}`)
+          fs.unlinkSync(join(process.cwd(), "tests", "vitest", p.split("/").pop().replace(/\.txt$/, "") + ".test.js"));
+      })
+        .on('error',  e => console.error('监听出错:', e));
+
+      process.stdin.setRawMode(true);
+      process.stdin.on('data', c => {
+        if (c.toString() === 'q' || c[0] === 3) {
+          console.log('\nbye');
+          process.exit(0);
+        }
+      });
+      process.stdin.resume();
+   
       break;
     }
 
-    case "test:watch":
+    case "test:watch:test":
       run(`pnpm vitest`);
       break;
+
+    case "test:build": {
+      const file = args[1];
+      if (!file) { usage(); process.exit(1); }
+      const base = file.replace(/\.txt$/, "").toLowerCase();
+      const scenarioFile = join(process.cwd(), "tests", "scenarios", base + ".txt");
+      const testContent = generateTestSuite(scenarioFile);
+      const testFile = join(process.cwd(), "tests", "vitest", base + ".test.js");
+      fs.writeFileSync(testFile, testContent); 
+      console.log(`生成测试文件 ${testFile}`);
+      break;
+    }
 
     case "test:debug": {
       const file = args[1];

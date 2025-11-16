@@ -55,7 +55,13 @@ export class StepExecutor {
     }
 
     // 生成一个可执行的函数，签名为 (stagehand, z, expect, page)
-    const compiled = async (stagehand, zParam, expectParam, page) => {
+    const compiled = async (stagehand, zParam, expectParam, page, path, fs, params) => {
+      const paramsKeys = Object.keys(params);
+      let paramsStr = "";
+      if(paramsKeys.length>0){
+        paramsStr = `const {${paramsKeys.join(",")}} = params`
+      }
+
       const runner = new Function(
         "stagehand",
         "context",
@@ -64,9 +70,10 @@ export class StepExecutor {
         "page",
         "path",
         "fs",
-        `return (async () => {  const result = ${translation.code}; return {title:page.title(),url:page.url(), result:result}; })();`
+        "params",
+        `return (async () => {${paramsStr};   const $$title = await page.title(); const $$result = ${translation.code}; return {title:$$title,url:page.url(), result:$$result}; })();`
       );
-      return await runner(stagehand,stagehand.context, zParam, expectParam, page, path,fs);
+      return await runner(stagehand,stagehand.context, zParam, expectParam, page, path, fs, params);
     };
 
     // 附带元信息，供预览/执行阶段使用
@@ -77,9 +84,23 @@ export class StepExecutor {
   // 执行已编译的步骤函数，并记录历史与日志
   async executeCompiledStep(compiled) {
     const { action, workflow, comment, expandedAction, translation } = compiled.__meta || {};
+    // const stepParams = translation.params;
     const stagehand = await this.getStagehandForWorkflow(workflow);
+
     // 取活动的页面
-    const page = stagehand.context.activePage();
+    let page = stagehand.context.activePage();
+    if(!page){
+      if(stagehand.context.pages.length>0){
+        page = stagehand.context.pages[0];
+        stagehand.context.setActivePage(page);
+      }
+      else{
+        page = await stagehand.context.newPage();
+      }
+    }
+
+    const pageTitle = await stagehand.context.activePage()?.title()
+    console.log(`workflow:${workflow}, pages count:${stagehand.context.pages.length}, active page:${pageTitle}`)
 
     const start = Date.now();
     try {
@@ -107,7 +128,7 @@ export class StepExecutor {
         },
       });
 
-      const result = await compiled(stagehand, z, expectShim, page);
+      const result = await compiled(stagehand, z, expectShim, page,path,fs,translation.params);
       const duration = Date.now() - start;
       this.executionHistory.push({ action, type: translation.type, success: true, duration, workflow, timestamp: new Date().toISOString() });
       console.log(`   ✅ 步骤执行成功 (${duration}ms)`);

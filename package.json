@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node bin/itest/runners/cli.js test",
     "test:file": "node bin/itest/runners/cli.js test:file",
+    "test:build": "node bin/itest/runners/cli.js test:build",
     "test:case": "node bin/itest/runners/cli.js test:case",
     "test:all": "vitest run",
     "test:ui": "vitest --ui",
@@ -24,6 +25,7 @@
   "packageManager": "pnpm@10.14.0",
   "dependencies": {
     "@browserbasehq/stagehand": "^3.0.1",
+    "chokidar": "^4.0.3",
     "dotenv": "^16.4.5",
     "glob": "^11.0.3",
     "js-yaml": "^4.1.0",
